@@ -1,0 +1,6 @@
+Keyboard History Check:
+In v0.1: Added the virtual keyboard (vk-modal).
+In v1.7: User requested to shrink the keyboard so it doesn't get squashed/compressed, make it fit the screen, and add "+", "-", and "%" keys.
+AI implemented v1.7 changes.
+User then said: "now there is no bottom area at all for +quests, items, reset data on stats, etc. all gone."
+AI realized it accidentally left "display: none !important" on the footer from a previous test and reverted it in v1.8.
