@@ -2078,9 +2078,7 @@
             // Force Android to actually connect to a video stream by specifying exact parameters
             const constraints = { 
                 video: { 
-                    facingMode: currentFacingMode,
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    facingMode: currentFacingMode
                 }, 
                 audio: false 
             };
