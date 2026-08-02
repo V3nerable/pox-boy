@@ -2042,6 +2042,11 @@
             const crtOverlay = document.getElementById('cam-crt-overlay');
             const reticle = document.getElementById('cam-reticle');
 
+            // Force close any background instances of html5QrCode before requesting a raw stream
+            if (html5QrCode && html5QrCode.isScanning) {
+                stopQRScanner();
+            }
+
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showNotification("CAMERA API NOT SUPPORTED. PLEASE USE SECURE HTTPS.");
                 return;
@@ -2051,7 +2056,17 @@
                 rawVideoStream.getTracks().forEach(track => track.stop());
             }
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: false })
+            // Force Android to actually connect to a video stream by specifying exact parameters
+            const constraints = { 
+                video: { 
+                    facingMode: currentFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }, 
+                audio: false 
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
             .then(stream => {
                 rawVideoStream = stream;
                 video.srcObject = stream;
@@ -2062,6 +2077,9 @@
                 } else {
                     video.style.transform = 'scaleX(1)';
                 }
+                
+                // Fix for Android blank screens: Force video to play explicitly
+                video.play().catch(e => console.warn("Auto-play prevented", e));
 
                 // UI Updates
                 placeholder.style.display = 'none';

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pipboy-cache-v4';
+const CACHE_NAME = 'pipboy-cache-v5';
 const urlsToCache = [
   './',
   './index.html',
@@ -10,9 +10,26 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Force the new service worker to activate immediately
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName); // Delete old caches automatically
+          }
+        })
+      );
+    }).then(() => {
+      return self.clients.claim(); // Take control of all open pages immediately
+    })
   );
 });
 
