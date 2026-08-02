@@ -212,6 +212,25 @@
             runBootSequence();
         }
 
+        function devSkipToApp() {
+            userProfile.name = "DEV TESTER";
+            userProfile.origin = obOrigins[0];
+            userProfile.trait = obTraits[0];
+            userProfile.perk = availablePerks[0];
+            userProfile.isInitiated = true;
+            
+            // Give baseline stats so UI doesn't break
+            userProfile.special = { S: 5, P: 5, E: 5, C: 5, I: 5, A: 5, L: 5 };
+            
+            calculateSkills();
+            saveToStorage();
+            
+            document.getElementById('pre-boot-overlay').style.display = 'none';
+            document.getElementById('boot-splash').style.display = 'none';
+            document.getElementById('onboarding-overlay').style.display = 'none';
+            renderProfile();
+        }
+
         function runBootSequence() {
             const logs = [
                 { id: 'boot-log-1', delay: 500 },

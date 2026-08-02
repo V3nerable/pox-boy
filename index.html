@@ -619,7 +619,10 @@
     </div>
 
     <!-- PRE-BOOT CALIBRATION OVERLAY -->
-    <div id="pre-boot-overlay" class="modal-overlay" style="z-index: 250; background: var(--pip-bg); flex-direction: column; display: none;">
+    <div id="pre-boot-overlay" class="modal-overlay" style="z-index: 250; background: var(--pip-bg); flex-direction: column; display: none; position: relative;">
+        <!-- Dev Skip Button -->
+        <button class="pip-btn" onclick="devSkipToApp()" style="position: absolute; top: 5px; right: 5px; font-size: 0.7rem; padding: 2px 5px; z-index: 260; border: none; color: #ff3333; opacity: 0.5;">[DEV: FAST BOOT]</button>
+        
         <div class="crt" style="position: absolute; top:0; left:0; right:0; bottom:0; pointer-events: none; z-index: 251;"></div>
         <div style="z-index: 252; width: 100%; max-width: 500px; padding: 25px; text-align: center; border: 2px solid var(--pip-color); background: rgba(5, 16, 5, 0.9); box-shadow: 0 0 15px var(--pip-color-dim);">
             <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--pip-color); padding-bottom: 10px;">HARDWARE CALIBRATION</h2>
