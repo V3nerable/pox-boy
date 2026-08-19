@@ -95,13 +95,13 @@
             height: 50px;
             flex-shrink: 0;
         }
-        .nav-item { font-size: 1.4rem; cursor: pointer; text-shadow: 0 0 5px var(--pip-color); opacity: 0.5; transition: opacity 0.2s; padding: 0 10px; white-space: nowrap; flex: 1; text-align: center; }
+        .nav-item { font-size: 1.4rem; cursor: pointer; text-shadow: 0 0 5px var(--pip-color); opacity: 0.5; transition: opacity 0.2s; padding: 0 10px; white-space: nowrap; flex: 0 0 auto; text-align: center; }
         .nav-item.active { opacity: 1; border-bottom: 3px solid var(--pip-color); }
         /* v0.61: prevent mail badge from causing layout shift */
         #mail-navitem { min-width: 80px; text-align: center; }
 
         .sub-nav { display: flex; justify-content: center; gap: 15px; padding: 5px 0; border-bottom: 1px dashed var(--pip-color-dim); font-size: 1rem; margin-bottom: 15px; flex-wrap: wrap; row-gap: 6px; }
-        .sub-nav-item { cursor: pointer; opacity: 0.5; }
+        .sub-nav-item { cursor: pointer; opacity: 0.5; padding: 8px 12px; margin: 0 4px; display: inline-block; }
         .sub-nav-item.active { opacity: 1; text-decoration: underline; }
 
         .content-area { flex-grow: 1; padding: 20px; overflow-y: auto; position: relative; z-index: 5; text-shadow: 0 0 4px var(--pip-color); }
@@ -118,7 +118,7 @@
         .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .special-list p { display: flex; justify-content: space-between; max-width: 150px; margin-bottom: 5px; }
         .skills-list { column-count: 2; column-gap: 20px; }
-        .vault-boy-container { display: flex; justify-content: center; align-items: center; height: 200px; border: 1px dashed var(--pip-color); margin-bottom: 15px; }
+        .vault-boy-container { display: flex; justify-content: center; align-items: center; min-height: 200px; border: 1px dashed var(--pip-color); margin-bottom: 15px; }
         .status-bars { margin-top: 20px; }
 
         /* v0.50: vault-boy status overlays (pure CSS — zero shipped art)
@@ -209,19 +209,28 @@
         #custom-prompt-modal {
             position: fixed !important;
             top: 0; left: 0; right: 0; bottom: 0;
-            align-items: flex-start;
+            width: 100vw;
+            height: 100vh;
             overflow-y: auto;
+            overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            padding: 40px 20px 20px 20px;
+            padding: 20px;
+            box-sizing: border-box;
             /* v0.61: override global user-select:none which blocks touch scrolling */
             user-select: auto !important;
             -webkit-user-select: auto !important;
             touch-action: pan-y !important;
         }
+        /* v0.85: explicit active state — was display:flex!important which made modal always visible */
+        /* v0.91: display:block instead of flex — flex containers don't scroll properly with tall children */
+        #custom-prompt-modal.active {
+            display: block !important;
+        }
         #custom-prompt-modal .modal-content {
             max-height: none;
             overflow-y: visible;
-            margin: 10px auto;
+            margin: 20px auto;
+            flex-shrink: 0;
             user-select: auto !important;
             -webkit-user-select: auto !important;
             touch-action: pan-y !important;
@@ -255,7 +264,7 @@
             .header { padding: 5px 10px; }
             .nav-tabs { padding: 5px 0; }
             .content-area { padding: 10px; }
-            .vault-boy-container { height: 120px; }
+            .vault-boy-container { min-height: 120px; }
             /* Map and Cam heights are now handled dynamically by flexbox in landscape */
         }
         

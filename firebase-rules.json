@@ -108,18 +108,58 @@
       "$contractId": {
         ".write": true,
         ".validate": "newData.hasChildren(['title', 'issuerUid', 'issuerName', 'type', 'status', 'createdAt'])",
-        "title":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-        "description": { ".validate": "newData.isString() && newData.val().length <= 500" },
-        "issuerUid":   { ".validate": "newData.isString() && newData.val().length <= 64" },
-        "issuerName":  { ".validate": "newData.isString() && newData.val().length <= 32" },
-        "type":        { ".validate": "newData.isString() && (newData.val() == 'first' || newData.val() == 'many' || newData.val() == 'timed')" },
-        "reward":      { ".validate": "newData.isString() && newData.val().length <= 100" },
-        "expiresAt":   { ".validate": "newData.isNumber() || newData.val() == null" },
-        "status":      { ".validate": "newData.isString() && (newData.val() == 'open' || newData.val() == 'completed' || newData.val() == 'cancelled')" },
-        "completedBy": { ".validate": "newData.isString() || newData.val() == null" },
-        "verifiedBy":  { ".validate": "newData.isString() && newData.val().length <= 32" },
-        "createdAt":   { ".validate": "newData.isNumber() && newData.val() > 1735689600000" },
-        "$other":      { ".validate": false }
+        "title":           { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+        "description":     { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "issuerUid":       { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "issuerName":      { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "type":            { ".validate": "newData.isString() && (newData.val() == 'first' || newData.val() == 'many' || newData.val() == 'timed')" },
+        "reward":          { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "expiresAt":       { ".validate": "newData.isNumber() || newData.val() == null" },
+        "status":          { ".validate": "newData.isString() && (newData.val() == 'open' || newData.val() == 'completed' || newData.val() == 'cancelled' || newData.val() == 'rejected')" },
+        "completedBy":     { ".validate": true },
+        "completedByName": { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "verifiedBy":      { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "evidencePhoto":   { ".validate": "newData.isString()" },
+        "createdAt":       { ".validate": "newData.isNumber() && newData.val() > 1735689600000" },
+        "$other":          { ".validate": false }
+      }
+    },
+    "quests": {
+      ".read": true,
+      "$questId": {
+        ".write": true,
+        "title":         { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+        "description":   { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "reward":        { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "type":          { ".validate": "newData.isString() && (newData.val() == 'direct' || newData.val() == 'global' || newData.val() == 'bounty')" },
+        "issuerUid":     { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "issuerName":    { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "status":        { ".validate": "newData.isString() && (newData.val() == 'open' || newData.val() == 'cancelled' || newData.val() == 'removed')" },
+        "assignedTo":    { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "targetUid":     { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "targetName":    { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "expiresAt":     { ".validate": "newData.isNumber() || newData.val() == null" },
+        "createdAt":     { ".validate": "newData.isNumber() && newData.val() > 1735689600000" },
+        "removedReason": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "removedAt":     { ".validate": "newData.isNumber() || newData.val() == null" },
+        "removedBy":     { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "progress": {
+          "$uid": {
+            ".write": true,
+            "acceptedAt":      { ".validate": "newData.isNumber()" },
+            "status":          { ".validate": "newData.isString() && (newData.val() == 'accepted' || newData.val() == 'completed' || newData.val() == 'verified' || newData.val() == 'rejected')" },
+            "completedAt":     { ".validate": "newData.isNumber() || newData.val() == null" },
+            "completedByName": { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "evidencePhoto":   { ".validate": "newData.isString()" },
+            "verifiedBy":      { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "verifiedByName":  { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "verifiedAt":      { ".validate": "newData.isNumber() || newData.val() == null" },
+            "rejectedBy":      { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "rejectedAt":      { ".validate": "newData.isNumber() || newData.val() == null" },
+            "$other":          { ".validate": false }
+          }
+        },
+        "$other":        { ".validate": false }
       }
     },
     "bounties": {
@@ -141,6 +181,16 @@
         "verifiedBy":    { ".validate": "newData.isString() && newData.val().length <= 32" },
         "createdAt":     { ".validate": "newData.isNumber() && newData.val() > 1735689600000" },
         "$other":        { ".validate": false }
+      }
+    },
+    "surrenderCodes": {
+      ".read": true,
+      "$uid": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['code', 'generatedAt'])",
+        "code":        { ".validate": "newData.isString() && newData.val().length == 6" },
+        "generatedAt": { ".validate": "newData.isNumber() && newData.val() > 1735689600000" },
+        "$other":      { ".validate": false }
       }
     },
     "$other": { ".read": false, ".write": false }

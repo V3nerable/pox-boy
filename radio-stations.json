@@ -148,42 +148,42 @@
      "d": 72.91
     },
     {
-     "t": "BACH \u2014 PARTITA NO. 3: GIGUE",
+     "t": "BACH — PARTITA NO. 3: GIGUE",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_partitano3gigue_bach_radio.opus",
      "b": 1030563,
      "d": 112.1
     },
     {
-     "t": "BACH \u2014 PARTITA NO. 3: PRELUDIO",
+     "t": "BACH — PARTITA NO. 3: PRELUDIO",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_partitano3p_bach_radio.opus",
      "b": 2111580,
      "d": 225.52
     },
     {
-     "t": "BACH \u2014 SONATA NO. 2: GRAVE",
+     "t": "BACH — SONATA NO. 2: GRAVE",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_sonatano2grave_bach_radio.opus",
      "b": 2539959,
      "d": 256.89
     },
     {
-     "t": "DVO\u0158\u00c1K \u2014 CELLO CONCERTO MVMT 1",
+     "t": "DVOŘÁK — CELLO CONCERTO MVMT 1",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_vc_1stmov_dvorak_radio.opus",
      "b": 3576820,
      "d": 384.84
     },
     {
-     "t": "DVO\u0158\u00c1K \u2014 CELLO CONCERTO MVMT 2",
+     "t": "DVOŘÁK — CELLO CONCERTO MVMT 2",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_vc_2ndmov_dvorak_radio.opus",
      "b": 2946874,
      "d": 315.8
     },
     {
-     "t": "SARASATE \u2014 ZIGEUNERWEISEN",
+     "t": "SARASATE — ZIGEUNERWEISEN",
      "a": "AGATHA'S STATION",
      "f": "mus_violin_z_sarasate_radio.opus",
      "b": 2911514,
@@ -660,14 +660,205 @@
    "name": "UNKNOWN TRANSMISSION",
    "item": "pox-radio-unknown",
    "base": "https://pox-alt-radio.netlify.app/unknown",
-   "tracks": []
+   "tracks": [
+    {
+     "t": "ALL THE THINGS SHE SAID",
+     "a": "UNKNOWN",
+     "f": "All the Things She Said (Nightcore Edit).opus",
+     "b": 1300000,
+     "d": 81.25
+    },
+    {
+     "t": "ALL I EVER WANTED",
+     "a": "BASSHUNTER",
+     "f": "Basshunter - All I Ever Wanted (Nightcore).opus",
+     "b": 1100000,
+     "d": 68.75
+    },
+    {
+     "t": "BOOM, BOOM, BOOM, BOOM!!",
+     "a": "UNKNOWN",
+     "f": "Boom, Boom, Boom, Boom!!.opus",
+     "b": 1100000,
+     "d": 68.75
+    },
+    {
+     "t": "NIGHTCORE - HD",
+     "a": "EVERYTIME WE TOUCH",
+     "f": "Everytime we touch - Nightcore - HD.opus",
+     "b": 1200000,
+     "d": 75.0
+    },
+    {
+     "t": "ANIMAL I HAVE BECOME",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Animal I Have Become (Rock Version) (Lyrics).opus",
+     "b": 1500000,
+     "d": 93.75
+    },
+    {
+     "t": "BAD BOY",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Bad boy.opus",
+     "b": 1200000,
+     "d": 75.0
+    },
+    {
+     "t": "BUBBLEGUM BITCH",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Bubblegum Bitch.opus",
+     "b": 1000000,
+     "d": 62.5
+    },
+    {
+     "t": "CALL ME MAYBE",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Call Me Maybe (But it hits different) (Lyrics).opus",
+     "b": 1400000,
+     "d": 87.5
+    },
+    {
+     "t": "POISON",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Poison.opus",
+     "b": 2400000,
+     "d": 150.0
+    },
+    {
+     "t": "TAKE A HINT",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - Take A Hint.opus",
+     "b": 997100,
+     "d": 62.32
+    },
+    {
+     "t": "THE ZOMBIE SONG",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - The Zombie Song.opus",
+     "b": 1100000,
+     "d": 68.75
+    },
+    {
+     "t": "THIS LITTLE GIRL",
+     "a": "NIGHTCORE",
+     "f": "Nightcore - This Little Girl.opus",
+     "b": 1300000,
+     "d": 81.25
+    },
+    {
+     "t": "ROCKEFELLER STREET",
+     "a": "NIGHTCORE CLASSICS",
+     "f": "Nightcore Classics - Rockefeller Street [HD].opus",
+     "b": 1300000,
+     "d": 81.25
+    },
+    {
+     "t": "ВОСЕМНАДЦАТЬ",
+     "a": "PAYWALL",
+     "f": "PAYWALL - Восемнадцать.opus",
+     "b": 1700000,
+     "d": 106.25
+    },
+    {
+     "t": "KISS ME AGAIN",
+     "a": "ROY BEE",
+     "f": "ROY BEE  - Kiss Me Again (Nightcore Official Mix).opus",
+     "b": 1100000,
+     "d": 68.75
+    },
+    {
+     "t": "КАНИКУЛЫ",
+     "a": "UNKNOWN",
+     "f": "каникулы.opus",
+     "b": 1600000,
+     "d": 100.0
+    }
+   ]
   },
   {
    "id": "waste",
    "name": "W.A.S.T.E FM",
    "item": "pox-radio-waste",
-   "base": "https://pox-alt-radio.netlify.app/w.a.s.t.e",
-   "tracks": []
+   "base": "https://pox-alt-radio.netlify.app/waste",
+   "tracks": [
+    {
+     "t": "RAINING BLOOD SLAYER, ORCHESTRAL ARRANGEMENT NO 2",
+     "a": "UNKNOWN",
+     "f": "Raining Blood  Slayer, Orchestral Arrangement no 2.opus",
+     "b": 1700000,
+     "d": 106.25
+    },
+    {
+     "t": "RAINING BLOOD",
+     "a": "UNKNOWN",
+     "f": "Raining Blood.opus",
+     "b": 1700000,
+     "d": 106.25
+    },
+    {
+     "t": "RAINING BLOOD COVER",
+     "a": "SLAYER",
+     "f": "SLAYER - RAINING BLOOD cover (ft. Nishant Hagjer).opus",
+     "b": 2000000,
+     "d": 125.0
+    },
+    {
+     "t": "RAINING BLOOD",
+     "a": "SLAYER",
+     "f": "Slayer - Raining Blood (8-bit version).opus",
+     "b": 1800000,
+     "d": 112.5
+    },
+    {
+     "t": "RAINING BLOODBARDCORE NORTHBLOOD",
+     "a": "SLAYER",
+     "f": "Slayer - Raining Blood (Dark Viking Doom Cover)  Bardcore Northblood.opus",
+     "b": 1600000,
+     "d": 100.0
+    },
+    {
+     "t": "RAINING BLOOD",
+     "a": "SLAYER",
+     "f": "Slayer - Raining Blood (Eric Sidey Remix) [FREE DOWNLOAD].opus",
+     "b": 2600000,
+     "d": 162.5
+    },
+    {
+     "t": "RAINING BLOOD",
+     "a": "SLAYER",
+     "f": "Slayer - Raining Blood (Hotcaller Remix) [DUBSTEP].opus",
+     "b": 1800000,
+     "d": 112.5
+    },
+    {
+     "t": "RAINING BLOOD, BUT IT'S SUPER EMO",
+     "a": "SLAYER",
+     "f": "Slayer - Raining Blood, but it's super emo.opus",
+     "b": 1600000,
+     "d": 100.0
+    },
+    {
+     "t": "RAINNING BLOOD",
+     "a": "SLAYER",
+     "f": "Slayer - Rainning Blood (Thrash Metal Remix).opus",
+     "b": 1600000,
+     "d": 100.0
+    },
+    {
+     "t": "SLAYER'S RAINING BLOOD BUT IT GROOVES_ YOU WON'T BELIEVE IT!",
+     "a": "UNKNOWN",
+     "f": "Slayer's Raining Blood But it Grooves_ YOU WON'T BELIEVE IT! (AI HEAVY  FUNK COVER).opus",
+     "b": 1800000,
+     "d": 112.5
+    },
+    {
+     "t": "RAINING BLOOD",
+     "a": "VADER",
+     "f": "Vader - Raining Blood.opus",
+     "b": 1700000,
+     "d": 106.25
+    }
+   ]
   }
  ]
 }

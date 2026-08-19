@@ -26,7 +26,7 @@
     <!-- Firebase SDK (Live Tracking) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getDatabase, ref, set, get, remove, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+        import { getDatabase, ref, set, get, remove, onValue, onDisconnect, push, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD5Uczvj78XsIsykhlasSYaMcPBO2WNvxs",
@@ -46,6 +46,8 @@
         window.firebaseOnDisconnect = onDisconnect;
         window.firebaseGet = get;
         window.firebaseRemove = remove;
+        window.firebasePush = push;
+        window.firebaseUpdate = update;
     </script>
 </head>
 <body class="crt">
@@ -54,7 +56,7 @@
         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
                 <span class="header-title" id="main-os-title">POX-BOY 3026</span>
-                <span style="font-size: 0.8rem; opacity: 0.5; flex-shrink: 0;">v0.76</span>
+                <span style="font-size: 0.8rem; opacity: 0.5; flex-shrink: 0;">v0.119</span>
                 <span style="opacity: 0.5;">|</span>
                 <span id="pip-clock" style="font-size: 0.9rem; opacity: 0.8; white-space: nowrap;"></span>
             </div>
@@ -98,12 +100,12 @@
                 <div class="vault-boy-container" id="vault-boy-container" onclick="openAvatarPicker()" style="cursor:pointer; position:relative;">
                     <!-- v0.50: vault-boy graphic = a shot from YOUR databank (pipboy-avatarimg);
                          status overlays (med ✚ / field ☢ / ≥250-rad static) drawn over it -->
-                    <div id="vb-img-wrap" style="position:relative; width:180px; height:180px; display:none;">
+                    <div id="vb-img-wrap" style="position:relative; width:100%; max-width:280px; aspect-ratio:1/1; display:none;">
                         <img id="vb-img" alt="" style="width:100%; height:100%; object-fit:cover; border:1px solid var(--pip-color); box-shadow:0 0 10px var(--pip-color-dim);">
                         <div id="vb-fx" style="position:absolute; inset:0; pointer-events:none;"></div>
                     </div>
                     <span id="vb-default" style="opacity:0.6; text-align:center;">[ VAULT BOY GRAPHIC HERE ]<br><span style="font-size:0.9rem;">TAP TO SET FROM DATABANK</span></span>
-                    <!-- v0.76: Starched Genes DNA strand lock indicator -->
+                    <!-- v0.84: Starched Genes DNA strand lock indicator -->
                     <span id="vb-starched" style="display:none; position:absolute; top:4px; right:4px; font-size:1.2rem; color:#ffb642; text-shadow:0 0 6px #ffb642;" title="STARCHED GENES ACTIVE">🧬🔒</span>
                 </div>
                 <p id="stat-name-display" style="text-align: center; font-size: 1.4rem; font-weight: bold; margin-bottom: 5px;">NAME: UNKNOWN</p>
@@ -120,15 +122,11 @@
                     <div id="status-rads-fill-bar" style="height: 100%; background-color: #ff3333; width: 0%; box-shadow: 0 0 5px #ff3333;"></div>
                 </div>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--pip-color-dim); padding-bottom: 5px; margin-bottom: 5px;">
-                    <div style="font-weight: bold;">ACTION POINTS</div>
-                    <div style="font-weight: bold;" id="status-ap-val">100 / 100</div>
-                </div>
-                
-                <!-- v0.76: RADIATION LEVEL row removed — already shown in HP/RADS bar + footer -->
+                <!-- v0.84: RADIATION LEVEL row removed — already shown in HP/RADS bar + footer -->
+                <!-- v0.119: ACTION POINTS row removed — never implemented, dead code -->
             </div>
 
-            <!-- SPECIAL (v0.76: merged with SKILLS + PERKS — one scrollable page) -->
+            <!-- SPECIAL (v0.84: merged with SKILLS + PERKS — one scrollable page) -->
             <div id="sub-stat-special" class="sub-tab-content">
                 <h2>ATTRIBUTES</h2><br>
                 <div class="special-list" id="special-list-display">
@@ -142,7 +140,7 @@
                 <div id="perks-list-display">
                     <!-- Populated by JS -->
                 </div>
-                <!-- v0.76: MUTATIONS — active mutations list (below perks, inside SPECIAL scroll) -->
+                <!-- v0.84: MUTATIONS — active mutations list (below perks, inside SPECIAL scroll) -->
                 <div id="mutations-section" style="margin-top: 25px; display: none;">
                     <h2 style="color: #ff9a3c; text-shadow: 0 0 6px #ff9a3c;">☢ MUTATIONS</h2><br>
                     <div id="mutations-list-display">
@@ -151,7 +149,7 @@
                 </div>
             </div>
 
-            <!-- SKILLS and PERKS removed as standalone tabs (v0.76: merged into SPECIAL above) -->
+            <!-- SKILLS and PERKS removed as standalone tabs (v0.84: merged into SPECIAL above) -->
 
             <!-- STATS (v0.53: relocated from DATA; hosts OVERSEER pariah/zone panels) -->
             <div id="sub-stat-stats" class="sub-tab-content">
@@ -178,19 +176,19 @@
                     <p>ENCLAVE MARCHES ENDURED: <span id="fs-marches">0</span></p>
                     <p>PHOTOGRAPHS REGRETTED: <span id="fs-regret">0</span></p>
                 </div>
-                <!-- v0.76: STARCHED GENES player unlock button (shown when Overseer enables globally) -->
+                <!-- v0.84: STARCHED GENES player unlock button (shown when Overseer enables globally) -->
                 <div id="starched-unlock-section" style="display:none; margin-top:20px; border-top:1px dashed var(--pip-color-dim); padding-top:15px;">
                     <button class="pip-btn" id="starched-unlock-btn" onclick="unlockStarchedGenes()" style="border-color:#ffb642; color:#ffb642; border-style:dashed;">[🧬 UNLOCK STARCHED GENES]</button>
                     <p style="font-size:0.85rem; opacity:0.7; margin-top:8px; line-height:1.4;">LOCK YOUR MUTATIONS IN PLACE. DECONTAMINATION STATIONS CANNOT STRIP THEM. ONE-TIME UNLOCK — PERMANENT.</p>
                 </div>
             </div>
 
-            <!-- v0.76: OVERSEER tab — all Overseer controls except radio (dev-mode only) -->
+            <!-- v0.84: OVERSEER tab — all Overseer controls except radio (dev-mode only) -->
             <div id="sub-stat-overseer" class="sub-tab-content">
                 <div id="overseer-pariahs" style="display:none;"></div>
             </div>
 
-            <!-- FACTIONS (v0.76: moved from DATA to STAT) -->
+            <!-- FACTIONS (v0.84: moved from DATA to STAT) -->
             <div id="sub-stat-factions" class="sub-tab-content">
                 <h2>WASTELAND FACTIONS</h2><br>
                 <div id="factions-list-display">
@@ -198,7 +196,7 @@
                 </div>
             </div>
 
-            <!-- OPTIONS (v0.76: moved from DATA to STAT) -->
+            <!-- OPTIONS (v0.84: moved from DATA to STAT) -->
             <div id="sub-stat-options" class="sub-tab-content">
                 <h2>APP OPTIONS</h2><br>
                 <button class="pip-btn" id="options-fs-btn" onclick="toggleFullscreen()" style="border-style: dashed;">[FULLSCREEN]</button>
@@ -234,34 +232,34 @@
             </div>
             <div class="sub-nav" id="data-sub-nav" style="flex-wrap: wrap; column-gap: 15px; row-gap: 6px;">
                 <div class="sub-nav-item active" onclick="switchSubTab('data', 'quests')">QUESTS</div>
-                <div class="sub-nav-item" onclick="switchSubTab('data', 'contracts')">CONTRACTS</div>
                 <div class="sub-nav-item" onclick="switchSubTab('data', 'wastelanders')">WASTELANDERS</div>
             </div>
 
-            <!-- APP OPTIONS moved to STAT > OPTIONS (v0.76) -->
+            <!-- APP OPTIONS moved to STAT > OPTIONS (v0.84) -->
 
-            <!-- CONTRACTS (v0.44): quests YOU issued, with live recipient statuses -->
-            <div id="sub-data-contracts" class="sub-tab-content">
-                <h2>ISSUED CONTRACTS</h2><br>
-                <div id="contracts-list">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-
-            <!-- QUESTS -->
+            <!-- QUESTS (v0.119: unified quest system) -->
             <div id="sub-data-quests" class="sub-tab-content active">
+                <button class="theme-btn" onclick="openCreateQuestModal()" style="width:100%; border-style:dashed; margin-bottom:15px;">[+ CREATE QUEST]</button>
                 <div class="sub-nav" id="quest-sub-nav" style="flex-wrap: wrap; column-gap: 15px; row-gap: 6px; margin-bottom: 15px;">
-                    <div class="sub-nav-item active" onclick="switchQuestTab('direct')">DIRECT</div>
-                    <div class="sub-nav-item" onclick="switchQuestTab('global')">GLOBAL</div>
-                    <div class="sub-nav-item" onclick="switchQuestTab('bounties')">BOUNTIES</div>
+                    <div class="sub-nav-item active" onclick="switchQuestTab('active')">ACTIVE</div>
+                    <div class="sub-nav-item" onclick="switchQuestTab('completed')">COMPLETED</div>
+                    <div class="sub-nav-item" onclick="switchQuestTab('available')">AVAILABLE</div>
+                    <div class="sub-nav-item" onclick="switchQuestTab('issued')">ISSUED</div>
+                    <div class="sub-nav-item" onclick="switchQuestTab('verified')">VERIFIED</div>
                 </div>
-                <div id="quest-tab-direct" class="quest-tab-content active">
+                <div id="quest-tab-active" class="quest-tab-content active">
                     <!-- Dynamically populated by JS -->
                 </div>
-                <div id="quest-tab-global" class="quest-tab-content" style="display:none;">
+                <div id="quest-tab-available" class="quest-tab-content" style="display:none;">
                     <!-- Dynamically populated by JS -->
                 </div>
-                <div id="quest-tab-bounties" class="quest-tab-content" style="display:none;">
+                <div id="quest-tab-issued" class="quest-tab-content" style="display:none;">
+                    <!-- Dynamically populated by JS -->
+                </div>
+                <div id="quest-tab-completed" class="quest-tab-content" style="display:none;">
+                    <!-- Dynamically populated by JS -->
+                </div>
+                <div id="quest-tab-verified" class="quest-tab-content" style="display:none;">
                     <!-- Dynamically populated by JS -->
                 </div>
             </div>
@@ -289,7 +287,7 @@
                     <div id="map-container"></div>
                     <!-- v0.56: live signal census -- the empty-map question now has a number -->
                     <div id="map-signals" style="position: absolute; top: 6px; left: 6px; z-index: 800; font-size: 0.75rem; padding: 2px 8px; border: 1px dashed var(--pip-color-dim); background: rgba(5,16,5,0.85); opacity: 0.9;">SIGNALS: --</div>
-                    <!-- v0.76: map camera overlay buttons — compact glyphs in the corner -->
+                    <!-- v0.84: map camera overlay buttons — compact glyphs in the corner -->
                     <div id="map-cam-overlay" style="position: absolute; bottom: 8px; right: 8px; z-index: 800; display: flex; gap: 4px;">
                         <button class="map-overlay-btn" onclick="mapGoMe()" title="Center on me">◎</button>
                         <button class="map-overlay-btn" onclick="mapFitAll()" title="Fit all">⛶</button>
@@ -319,14 +317,14 @@
                     </div>
                 </div>
             </div>
-            <!-- v0.76: scrollable live wastelanders list below map -->
-            <div id="wastelanders-list-map" style="margin-top: 2px; max-height: 200px; overflow-y: auto; padding-top: 3px;">
+            <!-- v0.84: scrollable live wastelanders list below map -->
+            <div id="wastelanders-list-map" style="margin-top: 0; max-height: 200px; overflow-y: auto; padding-top: 3px;">
                 <h3 style="font-size: 1rem; margin-bottom: 5px;">LIVE WASTELANDERS</h3>
                 <div id="wastelanders-scroll" style="font-size: 0.9rem;">
                     <!-- Populated by JS -->
                 </div>
             </div>
-            <!-- v0.76: cold wastelanders list below live wastelanders -->
+            <!-- v0.84: cold wastelanders list below live wastelanders -->
             <div id="cold-wastelanders-list-map" style="margin-top: 3px; max-height: 150px; overflow-y: auto; padding-top: 3px;">
                 <h3 style="font-size: 1rem; margin-bottom: 5px; opacity: 0.7;">COLD WASTELANDERS</h3>
                 <div id="cold-wastelanders-scroll" style="font-size: 0.85rem; opacity: 0.7;">
@@ -428,6 +426,15 @@
             <!-- v0.54: Overseer broadcast desk (dev-mode render target) + STATION SYNC toggle -->
             <div id="radio-overseer" style="display: none;"></div>
             <button class="pip-btn" id="radio-sync-btn" onclick="radioSyncToggle()" style="width: 100%; border-style: dashed; margin-top: 10px;">[ STATION SYNC: ON ]</button>
+            
+            <!-- v0.119: Sync indicator and manual adjustment -->
+            <div id="radio-sync-controls" style="display: none; margin-top: 10px; text-align: center;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <button class="pip-btn" onclick="radioSyncAdjust(-0.1)" style="padding: 4px 12px; font-size: 0.9rem; width: auto;">[-0.1s]</button>
+                    <span id="radio-sync-indicator" style="font-size: 0.9rem; color: #39ff14; text-shadow: 0 0 5px #39ff14; min-width: 80px;">SYNC ±0.0s</span>
+                    <button class="pip-btn" onclick="radioSyncAdjust(0.1)" style="padding: 4px 12px; font-size: 0.9rem; width: auto;">[+0.1s]</button>
+                </div>
+            </div>
 
             <!-- v0.53: pack downloader — confirm popup quotes true bytes from the manifest -->
             <button class="pip-btn" id="radio-dl-btn" onclick="radioDownloadMenu()" style="width: 100%; border-style: dashed; border-color: #ffb642; color: #ffb642; margin-top: 10px;">[⇩ DOWNLOAD RADIO CONTENT]</button>
@@ -451,13 +458,13 @@
         </div>
 
         <div class="footer-action-container" style="flex-grow: 2; margin: 0 15px;">
-            <button class="theme-btn" id="add-quest-btn" onclick="openAddQuestModal()" style="display: none;">+ ADD QUEST</button>
+
             <div id="faction-controls" style="display: none; justify-content: center; gap: 10px;">
                 <button class="theme-btn" onclick="openFactionAuth('ADD')">+ ADD FACTION</button>
                 <button class="theme-btn" onclick="openFactionAuth('EDIT')" style="border-style: dashed;">EDIT FACTION</button>
             </div>
-            <!-- v0.76: map add/remove marker buttons removed from footer (use long-press map or split-controls sidebar) -->
-            <!-- v0.76: map camera controls moved to overlay on the map itself -->
+            <!-- v0.84: map add/remove marker buttons removed from footer (use long-press map or split-controls sidebar) -->
+            <!-- v0.84: map camera controls moved to overlay on the map itself -->
             <div id="dev-controls" style="display: none; justify-content: center; gap: 10px;">
                 <button class="theme-btn" onclick="triggerDevReset()" style="border-color: #ff3333; color: #ff3333;">FACTORY RESET</button>
                 <button class="theme-btn" onclick="toggleDevMode()" style="border-color: #42b6ff; color: #42b6ff;">TOGGLE OVERSEER</button>
@@ -465,10 +472,6 @@
         </div>
 
         <div style="width: 80px; text-align: right; display: flex; flex-direction: column; justify-content: center;">
-            <span id="footer-ap-display" style="font-size: 0.9rem;">AP 100/100</span>
-            <div style="width: 100%; height: 10px; border: 1px solid var(--pip-color); background: var(--pip-bg); margin-top: 2px;">
-                <div style="height: 100%; background-color: var(--pip-color); width: 100%; box-shadow: 0 0 5px var(--pip-color);"></div>
-            </div>
         </div>
     </div>
 
@@ -520,7 +523,29 @@
         </div>
     </div>
 
-    <!-- COMPOSE BOUNTY MODAL (v0.76) -->
+    <!-- UNIFIED QUEST CREATION MODAL (v0.119) -->
+    <div id="create-quest-modal" class="modal-overlay" style="z-index: 125;">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+            <h3 id="cq-modal-title">CREATE QUEST</h3>
+            <div class="form-group"><label>TITLE</label><input type="text" id="new-quest-title" class="pip-input vk-target" readonly onclick="openVk('new-quest-title')" maxlength="100" placeholder="Quest title..."></div>
+            <div class="form-group"><label>DESCRIPTION</label><textarea id="new-quest-desc" class="pip-input vk-target" readonly onclick="openVk('new-quest-desc')" maxlength="500" rows="3" placeholder="Quest details..."></textarea></div>
+            <div class="form-group"><label>REWARD (optional)</label><input type="text" id="new-quest-reward" class="pip-input vk-target" readonly onclick="openVk('new-quest-reward')" maxlength="100" placeholder="e.g., 50 caps, a drink..."></div>
+            <div class="form-group" id="quest-recipient-group" style="display:none;">
+                <label>RECIPIENT</label>
+                <input type="text" id="new-quest-recipient-display" class="pip-input" readonly onclick="openQuestRecipientPicker()" placeholder="Select mutual contact...">
+                <input type="hidden" id="new-quest-recipient" value="">
+            </div>
+            <div class="form-group" id="quest-target-group" style="display:none;">
+                <label>TARGET</label>
+                <input type="text" id="new-quest-target-display" class="pip-input" readonly onclick="openQuestTargetPicker()" placeholder="Select target...">
+                <input type="hidden" id="new-quest-target" value="">
+            </div>
+            <button class="pip-btn" id="submit-quest-btn" onclick="submitQuestFromModal()">CREATE QUEST</button>
+            <button class="pip-btn" onclick="closeModals()" style="margin-top: 15px; border-style: dashed;">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- COMPOSE BOUNTY MODAL (v0.84) -->
     <div id="compose-bounty-modal" class="modal-overlay" style="z-index: 125;">
         <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <h3>POST BOUNTY</h3>
@@ -538,7 +563,7 @@
         </div>
     </div>
 
-    <!-- COMPOSE GLOBAL CONTRACT MODAL (v0.76) -->
+    <!-- COMPOSE GLOBAL CONTRACT MODAL (v0.84) -->
     <div id="compose-global-contract-modal" class="modal-overlay" style="z-index: 125;">
         <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <h3>CREATE GLOBAL CONTRACT</h3>
@@ -575,7 +600,7 @@
         </div>
     </div>
 
-    <!-- v0.76: quickcam removed (SNAP NOW never worked reliably; too many permission/modal conflicts) -->
+    <!-- v0.84: quickcam removed (SNAP NOW never worked reliably; too many permission/modal conflicts) -->
 
     <!-- COMPOSE ITEM MODAL -->
     <div id="compose-item-modal" class="modal-overlay" style="z-index: 125;">
@@ -605,6 +630,7 @@
     <div id="photo-pick-modal" class="modal-overlay" style="z-index: 126;">
         <div class="modal-content" style="max-width: 600px; max-height: 85vh;">
             <h3 id="pp-title">TRANSMIT PHOTO</h3>
+            <button class="pip-btn" onclick="snapNowForPicker()" style="width: 100%; border-style: dashed; margin-bottom: 15px; background: rgba(57, 255, 20, 0.2);">📷 SNAP NOW</button>
             <div id="pp-grid" style="overflow-y: auto; max-height: 60vh; margin-bottom: 15px;"></div>
             <button class="pip-btn" onclick="closePhotoPick()" style="border-style: dashed;">CANCEL</button>
         </div>
@@ -680,7 +706,7 @@
                     <button class="pip-btn vk-btn vk-sm" onclick="vkPress('?')">?</button>
                     <button class="pip-btn vk-btn vk-wide" onclick="vkConfirm()" style="flex: 2.2; border-style: dashed; font-weight: bold;">ENTER</button>
                 </div>
-                <!-- v0.76: brackets and angle brackets row -->
+                <!-- v0.84: brackets and angle brackets row -->
                 <div style="display: flex; gap: 4px; justify-content: center;">
                     <button class="pip-btn vk-btn vk-sm" onclick="vkPress('[')">[</button>
                     <button class="pip-btn vk-btn vk-sm" onclick="vkPress(']')">]</button>
@@ -790,7 +816,7 @@
             <!-- v0.45: long messages scroll inside the box (pre-line honors \n) so buttons never get pushed off-screen -->
             <p id="cp-text" style="margin: 25px 0; font-size: 1.4rem; font-weight: bold; white-space: pre-line; max-height: 40vh; overflow-y: auto;"></p>
             <div id="cp-buttons" style="display: flex; gap: 10px; justify-content: center; flex-direction: column;">
-                <!-- Buttons injected by JS -->
+                <!-- Buttons injected by JS (including fallback close button) -->
             </div>
         </div>
     </div>
@@ -959,7 +985,7 @@
     <div id="pre-boot-overlay" class="modal-overlay" style="z-index: 250; background: var(--pip-bg); flex-direction: column; display: none;">
         <!-- Version Tag & Dev Skip Button -->
         <div style="position: absolute; top: 10px; right: 10px; z-index: 260; display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
-            <span style="font-size: 0.8rem; opacity: 0.5;">v0.76</span>
+            <span style="font-size: 0.8rem; opacity: 0.5;">v0.119</span>
             <button class="pip-btn" onclick="devSkipToApp()" style="font-size: 0.7rem; padding: 2px 5px; border: none; color: #ff3333; opacity: 0.5;">[DEV: FAST BOOT]</button>
         </div>
         
@@ -975,7 +1001,7 @@
                 <button class="pip-btn" id="pb-install-btn" onclick="installApp()" style="font-size: 1.4rem; display: none;">[3] INSTALL APP</button>
             </div>
             
-            <!-- v0.76: GPS scrambling notice -->
+            <!-- v0.84: GPS scrambling notice -->
             <div style="margin-bottom: 20px; padding: 10px; border: 1px dashed #ffb642; background: rgba(255, 182, 66, 0.1);">
                 <p style="font-size: 0.95rem; color: #ffb642; margin: 0; line-height: 1.4;">
                     <strong>📍 LOCATION PROTECTION ACTIVE</strong><br>
@@ -990,7 +1016,7 @@
 
     <!-- BOOT SPLASH SCREEN -->
     <div id="boot-splash" class="modal-overlay" style="z-index: 200; background: var(--pip-bg); flex-direction: column; display: flex;">
-        <span style="position: absolute; top: 10px; right: 10px; font-size: 0.8rem; opacity: 0.5; z-index: 203;">v0.76</span>
+        <span style="position: absolute; top: 10px; right: 10px; font-size: 0.8rem; opacity: 0.5; z-index: 203;">v0.119</span>
         <div class="crt" style="position: absolute; top:0; left:0; right:0; bottom:0; pointer-events: none; z-index: 201;"></div>
         <div style="z-index: 202; width: 100%; max-width: 600px; padding: 20px; text-align: left; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; justify-content: flex-end;" id="boot-text-container">
             <p id="boot-log-1" style="margin-bottom: 5px; display: none; font-size: 1rem;">ROBCO INDUSTRIES UNIFIED OPERATING SYSTEM</p>

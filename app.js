@@ -125,10 +125,7 @@
             { id: 4, name: "DRINK TICKET", type: "aid", effects: "Restores Thirst", quantity: 2, equipped: false }
         ];
         
-        let quests = storedQuests ? JSON.parse(storedQuests) : [
-            { id: 1, name: "THE GATHERING", type: "MAIN", giver: "VAULT-TEC SURVIVORS", location: "VENUE ENTRANCE", timeStr: "--:--", expireTime: null, objectives: ["Find the venue entrance.", "Check in with Overseer."], completed: false, expired: false, abandoned: false },
-            { id: 2, name: "SCAVENGER HUNT", type: "SIDE", giver: "SCAVENGERS GUILD", location: "BAR AREA", timeStr: "23:59", expireTime: new Date().setHours(23, 59, 59, 999), objectives: ["Locate 3 hidden Nuka-Colas", "Return to bartender for prize"], completed: false, expired: false, abandoned: false }
-        ];
+        let quests = storedQuests ? JSON.parse(storedQuests) : [];
 
         let factions = storedFactions ? JSON.parse(storedFactions) : [
             { id: 1, name: "THE WAR BOYS", rep: 25, leader: "Immortan Joe", blurb: "Cult fanatical foot soldiers loyal to the Immortan.", bio: "Raised from birth to serve the Immortan, these pale warriors live half-lives, sustained by bloodbags and the promise of Valhalla.", members: ["Slit", "Nux", "Morsov", "Rictus Erectus"] },
@@ -1105,7 +1102,7 @@
 
             // Button Visibility Logic (v0.53: INV retired; dev console lives under STAT > STATS)
             const aib = document.getElementById('add-item-btn'); if (aib) aib.style.display = 'none';
-            document.getElementById('add-quest-btn').style.display = (tabId === 'data' && currentDataTab === 'quests' && isDev) ? 'inline-block' : 'none';
+            // v0.111: add-quest-btn removed (legacy system), using openCreateQuestModal button in QUESTS tab instead
             document.getElementById('faction-controls').style.display = (tabId === 'data' && currentDataTab === 'factions' && isDev) ? 'flex' : 'none';
             document.getElementById('dev-controls').style.display = (tabId === 'stat' && currentStatTab === 'stats') ? 'flex' : 'none';
             
@@ -1123,7 +1120,13 @@
             }
             if (tabId === 'map') {
                 // Leaflet needs to calculate size AFTER display block is applied
-                setTimeout(initPipMap, 50); 
+                setTimeout(() => {
+                    initPipMap();
+                    // v0.106: Auto-center on user when opening MAP tab
+                    setTimeout(() => {
+                        if (typeof mapGoMe === 'function') mapGoMe();
+                    }, 100);
+                }, 50); 
             }
             if (tabId === 'cam') {
                 renderPhotoGallery();
@@ -1160,7 +1163,7 @@
             } else if (parentTab === 'data') {
                 // v0.70: DATA sub-tabs are now QUESTS / CONTRACTS / WASTELANDERS (FACTIONS moved to STAT)
                 currentDataTab = subTabId;
-                document.getElementById('add-quest-btn').style.display = (subTabId === 'quests' && isDev) ? 'inline-block' : 'none';
+                // v0.110: add-quest-btn removed (legacy system), using openCreateQuestModal button instead
                 const devBtns = document.getElementById('dev-controls'); if (devBtns && subTabId !== '_mail') devBtns.style.display = (currentStatTab === 'stats' && document.getElementById('tab-stat').classList.contains('active')) ? 'flex' : 'none';
 
                 document.getElementById(`tab-${parentTab}`).querySelectorAll('.sub-tab-content').forEach(el => el.classList.remove('active'));
@@ -1722,12 +1725,23 @@
             // on every open so an old photo never bleeds into an unrelated query
             const cpImg = document.getElementById('cp-img');
             if (cpImg) { cpImg.style.display = 'none'; cpImg.removeAttribute('src'); }
-            document.getElementById('cp-text').innerText = text;
+            
+            // v0.87: hide title and text when text is empty (e.g., remove marker list)
+            const cpTitle = document.getElementById('cp-title');
+            const cpText = document.getElementById('cp-text');
+            if (!text || text.trim() === '') {
+                if (cpTitle) cpTitle.style.display = 'none';
+                if (cpText) cpText.style.display = 'none';
+            } else {
+                if (cpTitle) cpTitle.style.display = '';
+                if (cpText) { cpText.style.display = ''; cpText.innerText = text; }
+            }
+            
             const btnContainer = document.getElementById('cp-buttons');
-            // v0.38: long button lists (e.g. mail recipient picker with a big rolodex)
-            // used to spill off-screen -- cap and scroll the stack instead
-            btnContainer.style.maxHeight = '65vh';
-            btnContainer.style.overflowY = 'auto';
+            // v0.88: NO max-height on buttons — let modal-content scroll everything
+            // This fixes the nested-scroll bug where top buttons disappeared above the fold
+            btnContainer.style.maxHeight = 'none';
+            btnContainer.style.overflowY = 'visible';
             btnContainer.style.webkitOverflowScrolling = 'touch';
             btnContainer.style.touchAction = 'pan-y';
             btnContainer.innerHTML = '';
@@ -1741,477 +1755,844 @@
                     btnEl.style.color = b.color;
                 }
                 btnEl.onclick = () => {
-                    document.getElementById('custom-prompt-modal').style.display = 'none';
+                    closeCustomPrompt();
                     if (b.action) b.action();
                 };
                 btnContainer.appendChild(btnEl);
             });
             
-            document.getElementById('custom-prompt-modal').style.display = 'flex';
-            // v0.59: ensure scroll works on mobile — reset all scroll positions
-            const overlay = document.getElementById('custom-prompt-modal');
-            if (overlay) { overlay.scrollTop = 0; overlay.style.webkitOverflowScrolling = 'touch'; }
-            const mc = overlay ? overlay.querySelector('.modal-content') : null;
-            if (mc) { mc.scrollTop = 0; mc.style.webkitOverflowScrolling = 'touch'; }
-            const bc = document.getElementById('cp-buttons');
-            if (bc) { bc.scrollTop = 0; bc.style.webkitOverflowScrolling = 'touch'; bc.style.touchAction = 'pan-y'; }
+            // v0.80: always add a close button as fallback
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'pip-btn';
+            closeBtn.innerText = '[CLOSE]';
+            closeBtn.style.borderStyle = 'dashed';
+            closeBtn.style.opacity = '0.7';
+            closeBtn.style.marginTop = '15px';
+            closeBtn.onclick = () => {
+                closeCustomPrompt();
+            };
+            btnContainer.appendChild(closeBtn);
+            
+            // v0.94: display:block — overlay is the single scroll container
+            const cpModal = document.getElementById('custom-prompt-modal');
+            // v0.94: reset scroll BEFORE showing to prevent inherited scroll position
+            cpModal.scrollTop = 0;
+            const mcEl = cpModal.querySelector('.modal-content');
+            if (mcEl) mcEl.scrollTop = 0;
+            cpModal.style.display = 'block';
+            cpModal.classList.add('active');
+            // v0.94: triple-tap scroll reset — immediate, after paint, and after paint-of-paint
+            cpModal.scrollTop = 0;
+            requestAnimationFrame(() => {
+                cpModal.scrollTop = 0;
+                requestAnimationFrame(() => {
+                    cpModal.scrollTop = 0;
+                    if (cpModal.scrollTo) cpModal.scrollTo(0, 0);
+                });
+            });
         }
 
+        // v0.95: Legacy renderQuests() wrapper — calls the appropriate new render function
         function renderQuests() {
-            const container = document.getElementById('quest-tab-direct');
-            if (!container) return;
-            container.innerHTML = '';
-            if (quests.length === 0) return container.innerHTML = '<p style="text-align:center; opacity:0.5;">NO DIRECT QUESTS</p>';
-            
-            quests.forEach(q => {
-                const el = document.createElement('div'); 
-                el.className = `item-row ${(q.completed || q.expired || q.abandoned) ? 'quest-completed' : ''}`;
-                el.style.flexDirection = 'column';
-                el.onclick = () => openQuestActionModal(q.id);
-                
-                let timeDisplay = `[${q.timeStr || q.time || '--:--'}]`;
-                if (q.expired) timeDisplay = `<span style="opacity: 0.5;">[EXPIRED]</span>`;
-                else if (q.completed) timeDisplay = `[COMPLETED]`;
-                else if (q.abandoned) timeDisplay = `[ABANDONED]`;
-                else if (q.expireTime) timeDisplay = `<span id="timer-${q.id}"></span>`;
-
-                let objHTML = q.objectives.map(obj => `<div class="quest-objective">${obj}</div>`).join('');
-                
-                let giverLine = q.giver ? `<div style="font-size: 0.85rem; opacity: 0.7; padding-left: 15px; margin-top: 2px;">GIVER: ${q.giver}</div>` : '';
-
-                if (q.abandoned) {
-                    el.innerHTML = `
-                        <div style="display: flex; justify-content: space-between;">
-                            <div><del>☒ ${q.name}</del></div>
-                            <div style="font-size: 0.9rem; opacity: 0.7;">${timeDisplay}</div>
-                        </div>
-                        <div style="font-size: 0.85rem; opacity: 0.7; padding-left: 15px; margin-top: 4px; text-decoration: line-through;">LOC: ${q.location} | TYPE: ${q.type}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.7; padding-left: 15px; margin-top: 2px; text-decoration: line-through;">${giverLine ? giverLine.replace(/<[^>]*>?/gm, '') : ''}</div>
-                    `;
-                } else {
-                    el.innerHTML = `
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>${q.completed ? '☑' : (q.expired ? '☒' : '■')} ${q.name}</div>
-                            <div style="font-size: 0.9rem; opacity: 0.7;">${timeDisplay}</div>
-                        </div>
-                        <div style="font-size: 0.85rem; opacity: 0.7; padding-left: 15px; margin-top: 4px;">LOC: ${q.location} | TYPE: ${q.type}</div>
-                        ${giverLine}
-                        <div style="margin-top: 8px;">${objHTML}</div>
-                    `;
-                }
-                container.appendChild(el);
-            });
+            const activeTab = document.querySelector('#quest-sub-nav .sub-nav-item.active');
+            if (activeTab) {
+                const tabText = activeTab.textContent.trim();
+                if (tabText === 'ACTIVE') renderActiveQuests();
+                else if (tabText === 'AVAILABLE') renderAvailableQuests();
+                else if (tabText === 'ISSUED') renderIssuedQuests();
+            }
         }
 
-        // v0.70: Quest tab switching (Direct / Global / Bounties)
+        // === UNIFIED QUEST SYSTEM (v0.91) ===
+        let firebaseQuests = {}; // Firebase firebaseQuests data
+
         function switchQuestTab(tabId) {
-            const subNav = document.getElementById('quest-sub-nav');
-            if (!subNav) return;
-            subNav.querySelectorAll('.sub-nav-item').forEach(el => {
-                const oc = el.getAttribute('onclick') || '';
-                el.classList.toggle('active', oc.includes("'" + tabId + "'"));
-            });
-            document.querySelectorAll('.quest-tab-content').forEach(el => {
-                el.classList.remove('active');
-                el.style.display = 'none';
-            });
-            const target = document.getElementById('quest-tab-' + tabId);
-            if (target) {
-                target.classList.add('active');
-                target.style.display = 'block';
-            }
-            // Render the appropriate tab
-            if (tabId === 'direct') renderQuests();
-            else if (tabId === 'global') renderGlobalContracts();
-            else if (tabId === 'bounties') renderBounties();
-        }
-
-        // v0.70: Render global contracts
-        function renderGlobalContracts() {
-            const container = document.getElementById('quest-tab-global');
-            if (!container) return;
-            container.innerHTML = '';
-            
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (isDev) {
-                container.innerHTML += '<button class="theme-btn" onclick="createGlobalContract()" style="width:100%; border-style:dashed; margin-bottom:15px;">[+ CREATE GLOBAL CONTRACT]</button>';
-            }
-            
-            const contracts = Object.entries(globalContracts).filter(([id, c]) => c.status === 'open');
-            if (contracts.length === 0) {
-                container.innerHTML += '<p style="text-align:center; opacity:0.5;">NO GLOBAL CONTRACTS AVAILABLE</p>';
-                return;
-            }
-            
-            contracts.forEach(([id, c]) => {
-                const el = document.createElement('div');
-                el.className = 'item-row';
-                el.style.flexDirection = 'column';
-                el.onclick = () => openGlobalContractModal(id, c);
-                
-                const typeLabel = c.type === 'first' ? 'FIRST TO COMPLETE' : (c.type === 'many' ? 'MANY CAN COMPLETE' : 'TIMED');
-                const expiresStr = c.expiresAt ? `EXPIRES: ${new Date(c.expiresAt).toLocaleString()}` : 'NO EXPIRY';
-                
-                el.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <div>■ ${escapeHtml(c.title)}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.7;">${typeLabel}</div>
-                    </div>
-                    <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 4px;">ISSUED BY: ${escapeHtml(c.issuerName || 'UNKNOWN')}</div>
-                    <div style="font-size: 0.85rem; opacity: 0.6; margin-top: 2px;">${expiresStr}</div>
-                    <div style="margin-top: 6px; font-size: 0.9rem;">${escapeHtml(c.description || '')}</div>
-                    ${c.reward ? `<div style="margin-top: 4px; font-size: 0.85rem; color: #5fc98e;">REWARD: ${escapeHtml(c.reward)}</div>` : ''}
-                `;
-                container.appendChild(el);
-            });
-        }
-
-        // v0.70: Render bounties
-        function renderBounties() {
-            const container = document.getElementById('quest-tab-bounties');
-            if (!container) return;
-            container.innerHTML = '';
-            
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (isDev) {
-                container.innerHTML += '<button class="theme-btn" onclick="createBounty()" style="width:100%; border-style:dashed; margin-bottom:15px;">[+ POST BOUNTY]</button>';
-            }
-            
-            const openBounties = Object.entries(bounties).filter(([id, b]) => b.status === 'open');
-            if (openBounties.length === 0) {
-                container.innerHTML += '<p style="text-align:center; opacity:0.5;">NO OPEN BOUNTIES</p>';
-                return;
-            }
-            
-            openBounties.forEach(([id, b]) => {
-                const el = document.createElement('div');
-                el.className = 'item-row';
-                el.style.flexDirection = 'column';
-                el.onclick = () => openBountyModal(id, b);
-                
-                const expiresStr = b.expiresAt ? `EXPIRES: ${new Date(b.expiresAt).toLocaleString()}` : 'NO EXPIRY';
-                
-                el.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <div>☠ ${escapeHtml(b.targetName)}</div>
-                        <div style="font-size: 0.85rem; color: #ff3333;">BOUNTY</div>
-                    </div>
-                    <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 4px;">POSTED BY: ${escapeHtml(b.issuerName || 'UNKNOWN')}</div>
-                    <div style="font-size: 0.85rem; opacity: 0.6; margin-top: 2px;">${expiresStr}</div>
-                    <div style="margin-top: 6px; font-size: 0.9rem;">${escapeHtml(b.reason || '')}</div>
-                    ${b.reward ? `<div style="margin-top: 4px; font-size: 0.85rem; color: #ffb642;">REWARD: ${escapeHtml(b.reward)}</div>` : ''}
-                `;
-                container.appendChild(el);
-            });
-        }
-
-        // v0.70: Create global contract (overseer only)
-        function createGlobalContract() {
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
-            
-            // v0.72: Open the global contract form modal instead of step-by-step prompts
-            document.getElementById('gc-title').value = '';
-            document.getElementById('gc-desc').value = '';
-            document.getElementById('gc-reward').value = '';
-            document.getElementById('gc-expires').value = '';
-            window.selectedGlobalContractType = 'first';
-            updateGlobalContractTypeDisplay();
-            document.getElementById('compose-global-contract-modal').style.display = 'flex';
-        }
-
-        // v0.72: Select global contract type
-        function selectGlobalContractType(type) {
-            window.selectedGlobalContractType = type;
-            updateGlobalContractTypeDisplay();
-        }
-
-        function updateGlobalContractTypeDisplay() {
-            const type = window.selectedGlobalContractType || 'first';
-            const labels = {
-                'first': 'FIRST TO COMPLETE',
-                'many': 'MANY CAN COMPLETE',
-                'timed': 'TIMED'
-            };
-            const display = document.getElementById('gc-type-display');
-            if (display) display.innerText = 'Selected: ' + (labels[type] || 'FIRST TO COMPLETE');
-            
-            // Update button styles
-            document.querySelectorAll('.gc-type-btn').forEach(btn => {
-                btn.style.borderColor = '';
-                btn.style.color = '';
-            });
-            const selectedBtn = document.querySelector('.gc-type-btn[onclick*="' + type + '"]');
-            if (selectedBtn) {
-                selectedBtn.style.borderColor = 'var(--pip-color)';
-                selectedBtn.style.color = 'var(--pip-color)';
-            }
-        }
-
-        // v0.72: Submit global contract form
-        function submitGlobalContractForm() {
-            const title = document.getElementById('gc-title').value.trim();
-            const description = document.getElementById('gc-desc').value.trim();
-            const reward = document.getElementById('gc-reward').value.trim();
-            const expiresHours = document.getElementById('gc-expires').value.trim();
-            const type = window.selectedGlobalContractType || 'first';
-            
-            if (!title) { showNotification('TITLE REQUIRED'); return; }
-            
-            const contractId = 'gc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const contract = {
-                title: title,
-                description: description || '',
-                issuerUid: localStorage.getItem('pipboy-uid') || 'unknown',
-                issuerName: userProfile.name || 'UNKNOWN',
-                type: type,
-                reward: reward || '',
-                expiresAt: null,
-                status: 'open',
-                completedBy: type === 'many' ? [] : null,
-                createdAt: Date.now()
-            };
-            
-            if (expiresHours && !isNaN(parseFloat(expiresHours))) {
-                contract.expiresAt = Date.now() + (parseFloat(expiresHours) * 3600000);
-            }
-            
-            window.firebaseSet(window.firebaseRef(window.db, 'globalContracts/' + contractId), contract)
-                .then(() => {
-                    showNotification('GLOBAL CONTRACT CREATED');
-                    closeModals();
-                    renderGlobalContracts();
-                })
-                .catch(err => showNotification('ERROR: ' + err.message));
-        }
-
-        // v0.70: Create bounty (overseer only)
-        // v0.70: Create bounty (overseer only)
-        function createBounty() {
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
-            
-            // v0.72: Open the bounty form modal instead of step-by-step prompts
-            document.getElementById('bounty-reason').value = '';
-            document.getElementById('bounty-reward').value = '';
-            document.getElementById('bounty-expires').value = '';
-            window.selectedBountyTarget = null;
-            populateBountyTargetList();
-            document.getElementById('compose-bounty-modal').style.display = 'flex';
-        }
-
-        // v0.72: Populate bounty target list
-        function populateBountyTargetList() {
-            const listEl = document.getElementById('bounty-target-list');
-            if (!listEl) return;
-            
-            // Show list of known wastelanders (beacons + rolodex)
-            const wastelanders = [];
-            const seenUids = new Set();
-            
-            // Add all beacons (live and cold)
-            Object.entries(lastKnownBeaconData || {}).forEach(([uid, b]) => {
-                if (!seenUids.has(uid)) {
-                    wastelanders.push({ uid, name: b.name || 'UNKNOWN' });
-                    seenUids.add(uid);
+            const tabs = ['active', 'completed', 'available', 'issued', 'verified'];
+            tabs.forEach(t => {
+                const navItem = document.querySelector(`#quest-sub-nav .sub-nav-item:nth-child(${tabs.indexOf(t) + 1})`);
+                const content = document.getElementById('quest-tab-' + t);
+                if (t === tabId) {
+                    if (navItem) navItem.classList.add('active');
+                    if (content) content.style.display = 'block';
+                } else {
+                    if (navItem) navItem.classList.remove('active');
+                    if (content) content.style.display = 'none';
                 }
             });
-            
-            // Add rolodex contacts (if not already in beacons)
-            rolodex.forEach(c => {
-                if (!seenUids.has(c.uid)) {
-                    wastelanders.push({ uid: c.uid, name: c.name || 'UNKNOWN' });
-                    seenUids.add(c.uid);
-                }
+            if (tabId === 'active') renderActiveQuests();
+            else if (tabId === 'completed') renderCompletedQuests();
+            else if (tabId === 'available') renderAvailableQuests();
+            else if (tabId === 'issued') renderIssuedQuests();
+            else if (tabId === 'verified') renderVerifiedQuests();
+        }
+
+        function renderActiveQuests() {
+            const container = document.getElementById('quest-tab-active');
+            if (!container) return;
+            const myUid = localStorage.getItem('pipboy-uid');
+            const html = [];
+
+            // Legacy local quests (from localStorage)
+            quests.forEach(q => {
+                if (q.completed || q.expired || q.abandoned) return;
+                html.push(`<div class="item-row" onclick="openQuestActionModal('${q.id}')">
+                    <div style="font-weight:bold;">${escapeHtml(q.name)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7;">${escapeHtml(q.giver || 'UNKNOWN')}</div>
+                    <div style="font-size:0.85rem; opacity:0.6;">${q.expireTime ? 'EXPIRES: ' + new Date(q.expireTime).toLocaleString() : 'NO EXPIRY'}</div>
+                </div>`);
             });
-            
-            if (wastelanders.length === 0) {
-                listEl.innerHTML = '<p style="opacity:0.5;">NO WASTELANDERS FOUND - SCAN DATACARDS FIRST</p>';
-                return;
-            }
-            
-            // Sort by name
-            wastelanders.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            
-            listEl.innerHTML = wastelanders.map(w => 
-                `<div style="padding: 6px; cursor: pointer; border-bottom: 1px dashed var(--pip-color-dim);" onclick="selectBountyTarget('${w.uid}', '${escapeHtml(w.name)}')">${escapeHtml(w.name)}</div>`
-            ).join('');
+
+            // Firebase firebaseQuests I've accepted (excluding verified - those go to VERIFIED tab)
+            Object.keys(firebaseQuests).forEach(id => {
+                const q = firebaseQuests[id];
+                const prog = q.progress && q.progress[myUid];
+                if (!prog || prog.status === 'rejected' || prog.status === 'verified') return;
+                const statusText = prog.status === 'completed' ? '⏳ AWAITING VERIFICATION' : 'ACTIVE';
+                const strike = prog.status !== 'accepted' ? 'line-through' : 'none';
+                const opacity = prog.status === 'completed' ? '0.7' : '1';
+                const border = prog.status === 'completed' ? '#ffb642' : 'var(--pip-color-dim)';
+                html.push(`<div class="item-row" style="border-color:${border}; opacity:${opacity};" onclick="openQuestModal('${id}')">
+                    <div style="font-weight:bold; text-decoration:${strike};">${escapeHtml(q.title)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7;">${q.type.toUpperCase()} — ${escapeHtml(q.issuerName || 'UNKNOWN')}</div>
+                    <div style="font-size:0.85rem; color:${border};">${statusText}</div>
+                    ${q.reward ? `<div style="font-size:0.85rem; color:#5fc98e;">REWARD: ${escapeHtml(q.reward)}</div>` : ''}
+                </div>`);
+            });
+
+            container.innerHTML = html.length ? html.join('') : '<p style="text-align:center; opacity:0.5;">NO ACTIVE QUESTS</p>';
         }
 
-        // v0.72: Select bounty target
-        function selectBountyTarget(uid, name) {
-            window.selectedBountyTarget = { uid, name };
-            const display = document.getElementById('bounty-target-display');
-            if (display) display.innerText = 'Target: ' + name;
+        function renderCompletedQuests() {
+            const container = document.getElementById('quest-tab-completed');
+            if (!container) return;
+            const myUid = localStorage.getItem('pipboy-uid');
+            const html = [];
+
+            // Legacy local quests (completed, expired, or abandoned)
+            quests.forEach(q => {
+                if (!q.completed && !q.expired && !q.abandoned) return;
+                const statusText = q.completed ? '✓ COMPLETED' : q.expired ? '⏰ EXPIRED' : '✗ ABANDONED';
+                const borderColor = q.completed ? '#39ff14' : q.expired ? '#ffb642' : '#ff3333';
+                html.push(`<div class="item-row" style="border-color:${borderColor}; opacity:0.6;" onclick="openQuestActionModal('${q.id}')">
+                    <div style="font-weight:bold; text-decoration:line-through;">${escapeHtml(q.name)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7;">${escapeHtml(q.giver || 'UNKNOWN')}</div>
+                    <div style="font-size:0.85rem; color:${borderColor};">${statusText}</div>
+                </div>`);
+            });
+
+            // Firebase quests with completed/rejected/verified/abandoned status
+            Object.keys(firebaseQuests).forEach(id => {
+                const q = firebaseQuests[id];
+                const prog = q.progress && q.progress[myUid];
+                if (!prog || prog.status === 'accepted') return;
+                
+                const isVerified = prog.status === 'verified';
+                const isCompleted = prog.status === 'completed';
+                const isRejected = prog.status === 'rejected';
+                const isAbandoned = prog.status === 'abandoned';
+                
+                const statusText = isVerified ? '✓ VERIFIED' : 
+                                   isCompleted ? '⏳ AWAITING VERIFICATION' : 
+                                   isRejected ? '✗ REJECTED' : 
+                                   isAbandoned ? '✗ ABANDONED' : prog.status.toUpperCase();
+                const borderColor = isVerified ? '#39ff14' : isCompleted ? '#ffb642' : '#ff3333';
+                const opacity = isVerified ? '0.6' : isRejected || isAbandoned ? '0.5' : '0.7';
+                
+                html.push(`<div class="item-row" style="border-color:${borderColor}; opacity:${opacity};" onclick="openQuestModal('${id}')">
+                    <div style="font-weight:bold; text-decoration:line-through;">${escapeHtml(q.title)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7;">${q.type.toUpperCase()} — ${escapeHtml(q.issuerName || 'UNKNOWN')}</div>
+                    <div style="font-size:0.85rem; color:${borderColor};">${statusText}</div>
+                    ${isVerified && prog.verifiedAt ? `<div style="font-size:0.75rem; opacity:0.6;">Verified: ${new Date(prog.verifiedAt).toLocaleString()}</div>` : ''}
+                    ${isRejected && prog.rejectedAt ? `<div style="font-size:0.75rem; opacity:0.6;">Rejected: ${new Date(prog.rejectedAt).toLocaleString()}</div>` : ''}
+                    ${isAbandoned && prog.abandonedAt ? `<div style="font-size:0.75rem; opacity:0.6;">Abandoned: ${new Date(prog.abandonedAt).toLocaleString()}</div>` : ''}
+                    ${prog.evidencePhoto ? `<div style="font-size:0.75rem; color:#ffb642;">📷 Evidence attached</div>` : ''}
+                    ${q.reward ? `<div style="font-size:0.85rem; color:#5fc98e;">REWARD: ${escapeHtml(q.reward)}</div>` : ''}
+                </div>`);
+            });
+
+            container.innerHTML = html.length ? html.join('') : '<p style="text-align:center; opacity:0.5;">NO COMPLETED QUESTS</p>';
         }
 
-        // v0.72: Submit bounty form
-        function submitBountyForm() {
-            if (!window.selectedBountyTarget) { showNotification('TARGET REQUIRED'); return; }
-            
-            const reason = document.getElementById('bounty-reason').value.trim();
-            const reward = document.getElementById('bounty-reward').value.trim();
-            const expiresHours = document.getElementById('bounty-expires').value.trim();
-            
-            const bountyId = 'bty_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const bounty = {
-                targetUid: window.selectedBountyTarget.uid,
-                targetName: window.selectedBountyTarget.name,
-                issuerUid: localStorage.getItem('pipboy-uid') || 'unknown',
-                issuerName: userProfile.name || 'UNKNOWN',
-                reason: reason || '',
-                reward: reward || '',
-                expiresAt: null,
-                status: 'open',
-                claimedBy: null,
-                createdAt: Date.now()
-            };
-            
-            if (expiresHours && !isNaN(parseFloat(expiresHours))) {
-                bounty.expiresAt = Date.now() + (parseFloat(expiresHours) * 3600000);
-            }
-            
-            window.firebaseSet(window.firebaseRef(window.db, 'bounties/' + bountyId), bounty)
-                .then(() => {
-                    showNotification('BOUNTY POSTED');
-                    closeModals();
-                    renderBounties();
-                })
-                .catch(err => showNotification('ERROR: ' + err.message));
+        function renderAvailableQuests() {
+            const container = document.getElementById('quest-tab-available');
+            if (!container) return;
+            const myUid = localStorage.getItem('pipboy-uid');
+            const html = [];
+
+            Object.keys(firebaseQuests).forEach(id => {
+                const q = firebaseQuests[id];
+                if (q.status !== 'open') return;
+                if (q.type === 'direct') return; // direct firebaseQuests not shown here
+                const alreadyAccepted = q.progress && q.progress[myUid];
+                if (alreadyAccepted) return; // already accepted
+                const typeLabel = q.type === 'global' ? '🌍 GLOBAL' : '☠ BOUNTY';
+                const targetLine = q.type === 'bounty' ? `<div style="font-size:0.85rem; color:#ff3333;">TARGET: ${escapeHtml(q.targetName || 'UNKNOWN')}</div>` : '';
+                html.push(`<div class="item-row" onclick="openQuestModal('${id}')">
+                    <div style="font-weight:bold;">${escapeHtml(q.title)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7;">${typeLabel} — ${escapeHtml(q.issuerName || 'UNKNOWN')}</div>
+                    ${targetLine}
+                    ${q.reward ? `<div style="font-size:0.85rem; color:#5fc98e;">REWARD: ${escapeHtml(q.reward)}</div>` : ''}
+                    <div style="font-size:0.85rem; opacity:0.6;">${q.expiresAt ? 'EXPIRES: ' + new Date(q.expiresAt).toLocaleString() : 'NO EXPIRY'}</div>
+                </div>`);
+            });
+
+            container.innerHTML = html.length ? html.join('') : '<p style="text-align:center; opacity:0.5;">NO AVAILABLE QUESTS</p>';
         }
 
-        // v0.70: Open global contract modal
-        function openGlobalContractModal(id, c) {
+        function renderIssuedQuests() {
+            const container = document.getElementById('quest-tab-issued');
+            if (!container) return;
             const myUid = localStorage.getItem('pipboy-uid');
             const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            const canComplete = c.status === 'open' && (!c.expiresAt || c.expiresAt > Date.now());
-            const alreadyCompleted = c.type === 'many' && c.completedBy && c.completedBy.includes(myUid);
-            
-            const buttons = [];
-            if (canComplete && !alreadyCompleted) {
-                buttons.push({ label: 'COMPLETE CONTRACT', action: () => completeGlobalContract(id, c) });
-            }
-            if (isDev && c.status === 'open') {
-                buttons.push({ label: 'VERIFY (OVERSEER)', action: () => verifyGlobalContract(id, c) });
-                buttons.push({ label: 'CANCEL CONTRACT', color: '#ff3333', action: () => cancelGlobalContract(id) });
-            }
-            buttons.push({ label: 'CLOSE', action: () => {} });
-            
-            const typeLabel = c.type === 'first' ? 'FIRST TO COMPLETE' : (c.type === 'many' ? 'MANY CAN COMPLETE' : 'TIMED');
-            const statusInfo = alreadyCompleted ? 'YOU COMPLETED THIS' : (c.status === 'open' ? 'OPEN' : c.status.toUpperCase());
-            
-            showCustomPrompt(`${escapeHtml(c.title)}\n\n${escapeHtml(c.description || '')}\n\nTYPE: ${typeLabel}\nSTATUS: ${statusInfo}${c.reward ? '\nREWARD: ' + escapeHtml(c.reward) : ''}`, buttons);
+            const html = [];
+
+            Object.keys(firebaseQuests).forEach(id => {
+                const q = firebaseQuests[id];
+                if (q.issuerUid !== myUid && !isDev) return;
+                
+                // v0.106: Handle cancelled status with strikethrough
+                // v0.107: Handle removed status with reason display
+                const isCancelled = q.status === 'cancelled';
+                const isRemoved = q.status === 'removed';
+                const isInactive = isCancelled || isRemoved;
+                const textDecoration = isInactive ? 'line-through' : 'none';
+                const opacity = isRemoved ? '0.4' : (isCancelled ? '0.5' : '1');
+                
+                const pendingVerifications = [];
+                if (q.progress) {
+                    Object.keys(q.progress).forEach(uid => {
+                        if (q.progress[uid].status === 'completed') {
+                            pendingVerifications.push({ uid, ...q.progress[uid] });
+                        }
+                    });
+                }
+                const pendingCount = pendingVerifications.length;
+                const borderColor = isRemoved ? '#ff3333' : (isCancelled ? 'var(--pip-color-dim)' : (pendingCount > 0 ? '#ffb642' : 'var(--pip-color-dim)'));
+                
+                let statusDisplay = q.status.toUpperCase();
+                let reasonDisplay = '';
+                if (isRemoved && q.removedReason) {
+                    statusDisplay = 'REMOVED';
+                    reasonDisplay = `<div style="font-size:0.75rem; color:#ff3333; margin-top:3px;">REASON: ${escapeHtml(q.removedReason)}${q.removedBy ? ' (by ' + escapeHtml(q.removedBy) + ')' : ''}</div>`;
+                }
+                
+                html.push(`<div class="item-row" style="border-color:${borderColor}; opacity:${opacity};" onclick="openIssuedQuestModal('${id}')">
+                    <div style="font-weight:bold; text-decoration:${textDecoration};">${escapeHtml(q.title)}</div>
+                    <div style="font-size:0.85rem; opacity:0.7; text-decoration:${textDecoration};">${q.type.toUpperCase()} — ${statusDisplay}</div>
+                    ${!isInactive && pendingCount > 0 ? `<div style="font-size:0.85rem; color:#ffb642;">⏳ ${pendingCount} PENDING VERIFICATION${pendingCount > 1 ? 'S' : ''}</div>` : ''}
+                    ${reasonDisplay}
+                </div>`);
+            });
+
+            container.innerHTML = html.length ? html.join('') : '<p style="text-align:center; opacity:0.5;">NO ISSUED QUESTS</p>';
         }
 
-        // v0.70: Complete global contract
-        function completeGlobalContract(id, c) {
+        function renderVerifiedQuests() {
+            // v0.116: Verified quests now appear in COMPLETED tab
+            // This tab is kept for backwards compatibility but shows message
+            const container = document.getElementById('quest-tab-verified');
+            if (!container) return;
+            container.innerHTML = '<p style="text-align:center; opacity:0.5;">VERIFIED QUESTS NOW APPEAR IN COMPLETED TAB</p>';
+        }
+
+        function openCreateQuestModal() {
+            showCustomPrompt('SELECT QUEST TYPE', [
+                { label: '📋 DIRECT (send to specific person)', action: () => createQuestForm('direct') },
+                { label: '🌍 GLOBAL (visible to all)', action: () => createQuestForm('global') },
+                { label: '☠ BOUNTY (hunt a target)', action: () => createQuestForm('bounty') },
+                { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+
+        function createQuestForm(type) {
+            // Show the unified quest creation modal
+            document.getElementById('create-quest-modal').style.display = 'flex';
+            document.getElementById('cq-modal-title').innerText = 'CREATE ' + type.toUpperCase() + ' QUEST';
+            
+            // Clear form fields
+            document.getElementById('new-quest-title').value = '';
+            document.getElementById('new-quest-desc').value = '';
+            document.getElementById('new-quest-reward').value = '';
+            document.getElementById('new-quest-recipient-display').value = '';
+            document.getElementById('new-quest-recipient').value = '';
+            document.getElementById('new-quest-target-display').value = '';
+            document.getElementById('new-quest-target').value = '';
+            
+            // Store the quest type for submission
+            window.pendingQuestType = type;
+            
+            // Show/hide recipient/target fields based on type
+            const recipientGroup = document.getElementById('quest-recipient-group');
+            const targetGroup = document.getElementById('quest-target-group');
+            
+            if (type === 'direct') {
+                recipientGroup.style.display = 'block';
+                targetGroup.style.display = 'none';
+            } else if (type === 'bounty') {
+                recipientGroup.style.display = 'none';
+                targetGroup.style.display = 'block';
+            } else {
+                // Global quest - no recipient or target
+                recipientGroup.style.display = 'none';
+                targetGroup.style.display = 'none';
+            }
+        }
+        
+        function openQuestRecipientPicker() {
+            // Filter to mutual contacts only
+            const mutualContacts = rolodex.filter(c => isMutualLink(c.uid));
+            if (mutualContacts.length === 0) {
+                showNotification('NO MUTUAL CONTACTS -- SCAN DATACARDS AND WAIT FOR ACCEPTANCE.');
+                return;
+            }
+            const buttons = mutualContacts.map(c => ({
+                label: c.name,
+                action: () => {
+                    document.getElementById('new-quest-recipient-display').value = c.name;
+                    document.getElementById('new-quest-recipient').value = c.uid;
+                }
+            }));
+            buttons.push({ label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} });
+            showCustomPrompt('SELECT RECIPIENT (MUTUAL CONTACTS ONLY):', buttons);
+        }
+        
+        function openQuestTargetPicker() {
+            // Show all known wastelanders (rolodex + beacon data)
+            const buttons = [];
+            
+            // Add rolodex contacts
+            rolodex.forEach(c => {
+                buttons.push({
+                    label: c.name + ' (contact)',
+                    action: () => {
+                        document.getElementById('new-quest-target-display').value = c.name;
+                        document.getElementById('new-quest-target').value = c.uid;
+                    }
+                });
+            });
+            
+            // Add beacon wastelanders not already in rolodex
+            const rolodexUids = new Set(rolodex.map(c => c.uid));
+            Object.keys(lastKnownBeaconData).forEach(uid => {
+                if (!rolodexUids.has(uid) && uid !== myMailUid) {
+                    const beacon = lastKnownBeaconData[uid];
+                    const name = beacon.name || 'UNKNOWN';
+                    buttons.push({
+                        label: name + ' (signal)',
+                        action: () => {
+                            document.getElementById('new-quest-target-display').value = name;
+                            document.getElementById('new-quest-target').value = uid;
+                        }
+                    });
+                }
+            });
+            
+            if (buttons.length === 0) {
+                showNotification('NO KNOWN WASTELANDERS -- OPEN MAP TO DETECT SIGNALS.');
+                return;
+            }
+            
+            buttons.push({ label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} });
+            showCustomPrompt('SELECT BOUNTY TARGET:', buttons);
+        }
+        
+        function submitQuestFromModal() {
+            const type = window.pendingQuestType;
+            if (!type) {
+                showNotification('ERROR: No quest type selected');
+                return;
+            }
+            
+            // For bounty, populate window.selectedBountyTarget from hidden field
+            if (type === 'bounty') {
+                const targetUid = document.getElementById('new-quest-target').value;
+                const targetName = document.getElementById('new-quest-target-display').value;
+                if (!targetUid) {
+                    showNotification('TARGET REQUIRED');
+                    return;
+                }
+                window.selectedBountyTarget = {
+                    uid: targetUid,
+                    name: targetName
+                };
+            }
+            
+            closeModals();
+            submitQuest(type);
+        }
+
+        function submitQuest(type) {
+            const title = document.getElementById('new-quest-title').value.trim();
+            const desc = document.getElementById('new-quest-desc').value.trim();
+            const reward = document.getElementById('new-quest-reward').value.trim();
+            if (!title) { showNotification('TITLE REQUIRED'); return; }
             const myUid = localStorage.getItem('pipboy-uid');
             const myName = userProfile.name || 'UNKNOWN';
-            
-            const updates = {};
-            if (c.type === 'first') {
-                updates.status = 'completed';
-                updates.completedBy = myUid;
-                updates.verifiedBy = null; // needs verification
-            } else if (c.type === 'many') {
-                const completedBy = c.completedBy || [];
-                if (!completedBy.includes(myUid)) {
-                    completedBy.push(myUid);
-                    updates.completedBy = completedBy;
-                }
+            const questData = {
+                type: type,
+                title: title,
+                description: desc,
+                reward: reward || null,
+                issuerUid: myUid,
+                issuerName: myName,
+                status: 'open',
+                createdAt: Date.now()
+            };
+            if (type === 'direct') {
+                const recipientUid = document.getElementById('new-quest-recipient').value;
+                if (!recipientUid) { showNotification('RECIPIENT REQUIRED'); return; }
+                questData.assignedTo = recipientUid;
+            } else if (type === 'bounty') {
+                const targetUid = document.getElementById('new-quest-target').value;
+                const targetName = document.getElementById('new-quest-target-display').value;
+                if (!targetUid) { showNotification('TARGET REQUIRED'); return; }
+                questData.targetUid = targetUid;
+                questData.targetName = targetName;
             }
-            
-            window.firebaseUpdate(window.firebaseRef(window.db, 'globalContracts/' + id), updates)
-                .then(() => {
-                    showNotification('CONTRACT COMPLETED - AWAITING VERIFICATION');
-                    renderGlobalContracts();
+            const questRef = window.firebaseRef(window.db, 'quests/');
+            window.firebasePush(questRef, questData)
+                .then(ref => {
+                    const questId = ref.key;
+                    showNotification('QUEST CREATED');
+                    if (type === 'direct') {
+                        // Send quest-offer mail to recipient
+                        const recipientUid = document.getElementById('new-quest-recipient').value;
+                        queueMail(recipientUid, 'quest-offer', {
+                            questId: questId,
+                            title: title,
+                            description: desc,
+                            reward: reward
+                        }, 'QUEST OFFER: ' + title);
+                    }
+                    switchQuestTab('issued');
                 })
                 .catch(err => showNotification('ERROR: ' + err.message));
         }
 
-        // v0.70: Verify global contract (overseer)
-        function verifyGlobalContract(id, c) {
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
-            
-            window.firebaseUpdate(window.firebaseRef(window.db, 'globalContracts/' + id), { verifiedBy: userProfile.name || 'OVERSEER' })
-                .then(() => {
-                    showNotification('CONTRACT VERIFIED');
-                    renderGlobalContracts();
-                })
-                .catch(err => showNotification('ERROR: ' + err.message));
+        function openQuestModal(id) {
+            try {
+                // Debug: confirm function is being called
+                console.log('openQuestModal called with id:', id);
+                
+                const q = firebaseQuests[id];
+                if (!q) {
+                    showNotification('QUEST NOT FOUND - ID: ' + id);
+                    console.error('Quest not found in firebaseQuests:', id);
+                    return;
+                }
+                
+                console.log('Quest data:', q);
+                
+                const myUid = localStorage.getItem('pipboy-uid');
+                if (!myUid) {
+                    showNotification('ERROR: No user ID found');
+                    return;
+                }
+                
+                const prog = q.progress && q.progress[myUid];
+                const isAccepted = prog && prog.status !== 'rejected';
+                const isCompleted = prog && prog.status === 'completed';
+                const isVerified = prog && prog.status === 'verified';
+                
+                console.log('Quest state:', { isAccepted, isCompleted, isVerified, prog });
+                
+                const buttons = [];
+                if (!isAccepted && q.type !== 'direct') {
+                    // Not accepted yet - show accept button
+                    buttons.push({ label: 'ACCEPT QUEST', action: () => acceptQuest(id) });
+                } else if (isAccepted && !isCompleted && !isVerified) {
+                    // Accepted but not completed - show action buttons
+                    buttons.push({ label: 'ATTACH PHOTO EVIDENCE', action: () => attachPhotoToQuest(id) });
+                    if (q.type === 'bounty') {
+                        buttons.push({ label: 'SCAN TARGET DATACARD', action: () => scanBountyTarget(id) });
+                    } else {
+                        buttons.push({ label: 'COMPLETE QUEST', action: () => completeQuest(id) });
+                    }
+                    // v0.116: Allow self-reject/abandon
+                    buttons.push({ label: 'ABANDON QUEST', color: '#ff3333', action: () => abandonQuest(id) });
+                } else if ((isCompleted || isVerified) && prog.evidencePhoto) {
+                    // Completed or verified - only allow viewing evidence (read-only)
+                    buttons.push({ label: 'VIEW EVIDENCE PHOTO', action: () => viewEvidencePhoto(prog.evidencePhoto) });
+                }
+                buttons.push({ label: 'CLOSE', action: () => {} });
+                
+                const typeLabel = q.type === 'global' ? '🌍 GLOBAL' : q.type === 'bounty' ? '☠ BOUNTY' : '📋 DIRECT';
+                const statusText = isVerified ? '✓ VERIFIED' : isCompleted ? '⏳ AWAITING VERIFICATION' : isAccepted ? 'ACTIVE' : 'NOT ACCEPTED';
+                const targetLine = q.type === 'bounty' ? `\nTARGET: ${escapeHtml(q.targetName || 'UNKNOWN')}` : '';
+                const desc = q.description ? `\n\n${escapeHtml(q.description)}` : '';
+                const rewardLine = q.reward ? `\n\nREWARD: ${escapeHtml(q.reward)}` : '';
+                
+                const promptText = `${typeLabel}\n${escapeHtml(q.title)}${desc}${targetLine}${rewardLine}\n\nSTATUS: ${statusText}\nISSUED BY: ${escapeHtml(q.issuerName || 'UNKNOWN')}`;
+                
+                console.log('Opening prompt with text:', promptText);
+                console.log('Buttons:', buttons);
+                
+                showCustomPrompt(promptText, buttons);
+            } catch (err) {
+                console.error('Error in openQuestModal:', err);
+                showNotification('ERROR OPENING QUEST: ' + err.message);
+            }
         }
 
-        // v0.70: Cancel global contract (overseer)
-        function cancelGlobalContract(id) {
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
-            
-            window.firebaseRemove(window.firebaseRef(window.db, 'globalContracts/' + id))
-                .then(() => {
-                    showNotification('CONTRACT CANCELLED');
-                    renderGlobalContracts();
-                })
-                .catch(err => showNotification('ERROR: ' + err.message));
-        }
-
-        // v0.70: Open bounty modal
-        function openBountyModal(id, b) {
+        function openIssuedQuestModal(id) {
+            const q = firebaseQuests[id];
+            if (!q) return;
             const myUid = localStorage.getItem('pipboy-uid');
             const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            const canClaim = b.status === 'open' && b.targetUid !== myUid && (!b.expiresAt || b.expiresAt > Date.now());
-            
             const buttons = [];
-            if (canClaim) {
-                buttons.push({ label: 'CLAIM BOUNTY (SCAN TARGET)', action: () => claimBounty(id, b) });
+            
+            // v0.107: Allow issuer to cancel open quests
+            if (q.issuerUid === myUid && q.status === 'open') {
+                buttons.push({ label: 'CANCEL QUEST', color: '#ff3333', action: () => cancelQuest(id) });
             }
-            if (isDev && b.status === 'open') {
-                buttons.push({ label: 'VERIFY (OVERSEER)', action: () => verifyBounty(id, b) });
-                buttons.push({ label: 'CANCEL BOUNTY', color: '#ff3333', action: () => cancelBounty(id) });
+            // v0.107: Allow issuer to cancel accepted quests (with warning)
+            else if (q.issuerUid === myUid && q.status !== 'cancelled' && q.status !== 'removed') {
+                buttons.push({ label: 'CANCEL QUEST (HAS PROGRESS)', color: '#ff3333', action: () => cancelQuest(id) });
+            }
+            // v0.110: Allow issuer to uncancel cancelled quests
+            if (q.issuerUid === myUid && q.status === 'cancelled') {
+                buttons.push({ label: 'UNCANCEL QUEST', color: '#39ff14', action: () => uncancelQuest(id) });
+            }
+            // v0.107: Allow overseer to remove any quest
+            if (isDev && q.status !== 'removed') {
+                buttons.push({ label: 'REMOVE QUEST (OVERSEER)', color: '#ff6600', action: () => removeQuest(id) });
             }
             buttons.push({ label: 'CLOSE', action: () => {} });
-            
-            const statusInfo = b.status === 'open' ? 'OPEN' : b.status.toUpperCase();
-            
-            showCustomPrompt(`☠ BOUNTY: ${escapeHtml(b.targetName)}\n\n${escapeHtml(b.reason || '')}\n\nSTATUS: ${statusInfo}${b.reward ? '\nREWARD: ' + escapeHtml(b.reward) : ''}`, buttons);
+            const pendingVerifications = [];
+            if (q.progress) {
+                Object.keys(q.progress).forEach(uid => {
+                    if (q.progress[uid].status === 'completed') {
+                        pendingVerifications.push({ uid, ...q.progress[uid] });
+                    }
+                });
+            }
+            let text = `${q.type.toUpperCase()} — ${q.status === 'open' ? 'OPEN' : q.status.toUpperCase()}\n\n${escapeHtml(q.title)}`;
+            if (q.description) text += `\n\n${escapeHtml(q.description)}`;
+            if (q.reward) text += `\n\nREWARD: ${escapeHtml(q.reward)}`;
+            if (pendingVerifications.length > 0) {
+                text += `\n\n━━━ PENDING VERIFICATIONS (${pendingVerifications.length}) ━━━`;
+                pendingVerifications.forEach(p => {
+                    text += `\n\nCOMPLETED BY: ${escapeHtml(p.completedByName || 'UNKNOWN')}`;
+                    if (p.evidencePhoto) text += `\n📷 EVIDENCE ATTACHED`;
+                    buttons.push({ 
+                        label: `VERIFY ${p.completedByName || 'UNKNOWN'}`, 
+                        color: '#39ff14', 
+                        action: () => verifyQuest(id, p.uid) 
+                    });
+                    buttons.push({ 
+                        label: `REJECT ${p.completedByName || 'UNKNOWN'}`, 
+                        color: '#ff3333', 
+                        action: () => rejectQuest(id, p.uid) 
+                    });
+                });
+            }
+            showCustomPrompt(text, buttons);
         }
 
-        // v0.70: Claim bounty (scan target's datacard)
-        function claimBounty(id, b) {
-            showNotification('SCAN TARGET\'S DATACARD TO CLAIM BOUNTY');
-            // Store pending bounty claim
-            window.pendingBountyClaim = { id, bounty: b };
-            // Start QR scanner
-            startQRScanner();
-        }
-
-        // v0.70: Verify bounty (overseer)
-        function verifyBounty(id, b) {
-            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
-            
-            window.firebaseUpdate(window.firebaseRef(window.db, 'bounties/' + id), { 
-                status: 'claimed',
-                verifiedBy: userProfile.name || 'OVERSEER'
+        function acceptQuest(id) {
+            const myUid = localStorage.getItem('pipboy-uid');
+            const myName = userProfile.name || 'UNKNOWN';
+            const progRef = window.firebaseRef(window.db, `quests/${id}/progress/${myUid}`);
+            window.firebaseSet(progRef, {
+                acceptedAt: Date.now(),
+                status: 'accepted',
+                completedByName: myName
             })
                 .then(() => {
-                    showNotification('BOUNTY VERIFIED');
-                    renderBounties();
+                    closeCustomPrompt();
+                    showNotification('QUEST ACCEPTED');
+                    // Refresh the active quests tab after a short delay to allow Firebase listener to fire
+                    setTimeout(() => {
+                        switchQuestTab('active');
+                        renderActiveQuests();
+                    }, 500);
                 })
                 .catch(err => showNotification('ERROR: ' + err.message));
         }
 
-        // v0.70: Cancel bounty (overseer)
-        function cancelBounty(id) {
+        function abandonQuest(id) {
+            showCustomPrompt('ABANDON THIS QUEST?\n\nThis will remove it from your active quests.', [
+                { label: 'ABANDON QUEST', color: '#ff3333', action: () => {
+                    const myUid = localStorage.getItem('pipboy-uid');
+                    const progRef = window.firebaseRef(window.db, `quests/${id}/progress/${myUid}`);
+                    window.firebaseUpdate(progRef, {
+                        status: 'abandoned',
+                        abandonedAt: Date.now()
+                    })
+                        .then(() => {
+                            closeCustomPrompt();
+                            showNotification('QUEST ABANDONED');
+                            setTimeout(() => {
+                                switchQuestTab('active');
+                                renderActiveQuests();
+                            }, 500);
+                        })
+                        .catch(err => showNotification('ERROR: ' + err.message));
+                }},
+                { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+
+        function completeQuest(id) {
+            try {
+                const myUid = localStorage.getItem('pipboy-uid');
+                const myName = userProfile.name || 'UNKNOWN';
+                const q = firebaseQuests[id];
+                if (!q) {
+                    showNotification('ERROR: Quest not found');
+                    return;
+                }
+                
+                // v0.117: Check if evidence photo is attached
+                const hasEvidence = window.pendingQuestPhoto && window.pendingQuestPhoto.questId === id;
+                
+                if (!hasEvidence) {
+                    // No evidence - show prompt to provide evidence
+                    showCustomPrompt('PROVIDE EVIDENCE\n\nPlease attach a photo as evidence before completing this quest.', [
+                        { label: 'ATTACH PHOTO', action: () => {
+                            closeCustomPrompt();
+                            attachPhotoToQuest(id);
+                        }},
+                        { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+                    ]);
+                    return;
+                }
+                
+                const updates = {
+                    status: 'completed',
+                    completedAt: Date.now(),
+                    completedByName: myName,
+                    evidencePhoto: window.pendingQuestPhoto.photo
+                };
+                window.pendingQuestPhoto = null;
+                
+                const progRef = window.firebaseRef(window.db, `quests/${id}/progress/${myUid}`);
+                window.firebaseUpdate(progRef, updates)
+                    .then(() => {
+                        closeCustomPrompt();
+                        showNotification('QUEST COMPLETED - AWAITING VERIFICATION');
+                        // Send verify-request mail to issuer
+                        if (q.issuerUid) {
+                            queueMail(q.issuerUid, 'verify-request', {
+                                questId: id,
+                                title: q.title,
+                                completedByName: myName,
+                                evidencePhoto: updates.evidencePhoto
+                            }, 'VERIFY: ' + q.title + ' COMPLETED BY ' + myName);
+                        }
+                        switchQuestTab('active');
+                    })
+                    .catch(err => showNotification('ERROR: ' + err.message));
+            } catch (err) {
+                showNotification('ERROR COMPLETING QUEST: ' + err.message);
+            }
+        }
+
+        function verifyQuest(id, uid) {
             const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
-            if (!isDev) { showNotification('OVERSEER ACCESS REQUIRED'); return; }
+            const myUid = localStorage.getItem('pipboy-uid');
+            const q = firebaseQuests[id];
+            if (q.issuerUid !== myUid && !isDev) {
+                showNotification('ONLY ISSUER OR OVERSEER CAN VERIFY');
+                return;
+            }
+            showCustomPrompt('VERIFY THIS COMPLETION?', [
+                { label: 'VERIFY', color: '#39ff14', action: () => {
+                    const progRef = window.firebaseRef(window.db, `quests/${id}/progress/${uid}`);
+                    window.firebaseUpdate(progRef, {
+                        status: 'verified',
+                        verifiedBy: myUid,
+                        verifiedByName: userProfile.name || 'UNKNOWN',
+                        verifiedAt: Date.now()
+                    })
+                        .then(() => {
+                            closeCustomPrompt();
+                            showNotification('COMPLETION VERIFIED');
+                            renderIssuedQuests();
+                        })
+                        .catch(err => showNotification('ERROR: ' + err.message));
+                }},
+                { label: 'VIEW EVIDENCE FIRST', action: () => {
+                    const prog = q.progress && q.progress[uid];
+                    if (prog && prog.evidencePhoto) {
+                        viewEvidencePhoto(prog.evidencePhoto);
+                    } else {
+                        showNotification('NO EVIDENCE PHOTO ATTACHED');
+                    }
+                }},
+                { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+
+        function rejectQuest(id, uid) {
+            const isDev = localStorage.getItem('pipboy-dev-mode') === 'true';
+            const myUid = localStorage.getItem('pipboy-uid');
+            const q = firebaseQuests[id];
+            if (q.issuerUid !== myUid && !isDev) {
+                showNotification('ONLY ISSUER OR OVERSEER CAN REJECT');
+                return;
+            }
+            showCustomPrompt('REJECT THIS COMPLETION?', [
+                { label: 'REJECT', color: '#ff3333', action: () => {
+                    const progRef = window.firebaseRef(window.db, `quests/${id}/progress/${uid}`);
+                    window.firebaseUpdate(progRef, {
+                        status: 'accepted',
+                        rejectedBy: myUid,
+                        rejectedAt: Date.now()
+                    })
+                        .then(() => {
+                            closeCustomPrompt();
+                            showNotification('COMPLETION REJECTED - QUEST RETURNED TO ACTIVE');
+                            renderIssuedQuests();
+                        })
+                        .catch(err => showNotification('ERROR: ' + err.message));
+                }},
+                { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+
+        function cancelQuest(id) {
+            const q = firebaseQuests[id];
+            const hasProgress = q && q.progress && Object.keys(q.progress).length > 0;
             
-            window.firebaseRemove(window.firebaseRef(window.db, 'bounties/' + id))
+            const confirmText = hasProgress 
+                ? 'CANCEL THIS QUEST?\n\n⚠️ WARNING: This quest has been accepted by users. Cancelling will affect their progress.'
+                : 'CANCEL THIS QUEST?';
+            
+            showCustomPrompt(confirmText, [
+                { label: 'CANCEL QUEST', color: '#ff3333', action: () => {
+                    const questRef = window.firebaseRef(window.db, `quests/${id}`);
+                    window.firebaseUpdate(questRef, { status: 'cancelled' })
+                        .then(() => {
+                            closeCustomPrompt();
+                            showNotification('QUEST CANCELLED');
+                            renderIssuedQuests();
+                        })
+                        .catch(err => showNotification('ERROR: ' + err.message));
+                }},
+                { label: 'BACK', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+        
+        // v0.110: Uncancel a cancelled quest
+        function uncancelQuest(id) {
+            showCustomPrompt('UNCANCEL THIS QUEST?', [
+                { label: 'UNCANCEL QUEST', color: '#39ff14', action: () => {
+                    const questRef = window.firebaseRef(window.db, `quests/${id}`);
+                    window.firebaseUpdate(questRef, { status: 'open' })
+                        .then(() => {
+                            closeCustomPrompt();
+                            showNotification('QUEST UNCANCELLED');
+                            renderIssuedQuests();
+                        })
+                        .catch(err => showNotification('ERROR: ' + err.message));
+                }},
+                { label: 'BACK', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+        
+        // v0.107: Overseer can remove any quest with a reason
+        function removeQuest(id) {
+            showCustomPrompt('REMOVE THIS QUEST? (OVERSEER ONLY)\n\nPlease provide a reason for removal:', [
+                { label: 'REMOVE: DUPLICATE', color: '#ff6600', action: () => executeRemoveQuest(id, 'DUPLICATE') },
+                { label: 'REMOVE: INAPPROPRIATE', color: '#ff6600', action: () => executeRemoveQuest(id, 'INAPPROPRIATE') },
+                { label: 'REMOVE: TESTING', color: '#ff6600', action: () => executeRemoveQuest(id, 'TESTING') },
+                { label: 'REMOVE: OTHER', color: '#ff6600', action: () => {
+                    const reason = prompt('Enter removal reason:');
+                    if (reason && reason.trim()) {
+                        executeRemoveQuest(id, reason.trim().toUpperCase());
+                    }
+                }},
+                { label: 'BACK', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+        
+        function executeRemoveQuest(id, reason) {
+            const questRef = window.firebaseRef(window.db, `quests/${id}`);
+            window.firebaseUpdate(questRef, { 
+                status: 'removed',
+                removedReason: reason,
+                removedAt: Date.now(),
+                removedBy: userProfile.name || 'OVERSEER'
+            })
                 .then(() => {
-                    showNotification('BOUNTY CANCELLED');
-                    renderBounties();
+                    closeCustomPrompt();
+                    showNotification('QUEST REMOVED: ' + reason);
+                    renderIssuedQuests();
                 })
                 .catch(err => showNotification('ERROR: ' + err.message));
+        }
+
+        function attachPhotoToQuest(id) {
+            if (!photoArchive.length) { showNotification('DATABANK EMPTY -- TAKE A PHOTO FIRST.'); return; }
+            photoPickMode = 'quest-evidence';
+            window.pendingQuestPhoto = { questId: id };
+            document.getElementById('pp-title').innerText = 'SELECT PHOTO EVIDENCE';
+            let html = '<div class="photo-tile-grid">';
+            photoArchive.forEach((e, i) => { html += `<div class="photo-tile" onclick="pickPhotoForQuestEvidence(${i})"><img src="${entryPip(e)}"></div>`; });
+            document.getElementById('pp-grid').innerHTML = html + '</div>';
+            document.getElementById('photo-pick-modal').style.display = 'flex';
+        }
+
+        function pickPhotoForQuestEvidence(idx) {
+            const entry = photoArchive[idx];
+            if (!entry) return;
+            document.getElementById('photo-pick-modal').style.display = 'none';
+            if (window.pendingQuestPhoto) {
+                window.pendingQuestPhoto.photo = entryPip(entry);
+                showNotification('PHOTO ATTACHED - NOW COMPLETE QUEST');
+                openQuestModal(window.pendingQuestPhoto.questId);
+            }
+        }
+
+        function scanBountyTarget(id) {
+            showCustomPrompt('SCAN TARGET\'S DATACARD QR TO PROVE COMPLETION', [
+                { label: 'START SCANNING', action: () => {
+                    closeCustomPrompt();
+                    window.pendingBountyScan = id;
+                    document.getElementById('qr-scan-modal').style.display = 'flex';
+                    startQRScanner();
+                }},
+                { label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} }
+            ]);
+        }
+
+        // v0.91: View evidence photo full-size
+        function viewEvidencePhoto(photo) {
+            const src = typeof photo === 'object' ? entryPip(photo) : photo;
+            showCustomPrompt('EVIDENCE PHOTO', [
+                { label: 'CLOSE', action: () => {} }
+            ]);
+            const cpImg = document.getElementById('cp-img');
+            if (cpImg) { cpImg.src = src; cpImg.style.display = 'block'; }
+        }
+
+        function handleBountyScan(scannedUid) {
+            if (!window.pendingBountyScan) return false;
+            const questId = window.pendingBountyScan;
+            window.pendingBountyScan = null;
+            const q = firebaseQuests[questId];
+            if (!q || q.type !== 'bounty') return false;
+            if (scannedUid !== q.targetUid) {
+                showNotification('WRONG TARGET - SCAN THE BOUNTY TARGET\'S DATACARD');
+                return true;
+            }
+            completeQuest(questId);
+            return true;
+        }
+
+        function startQuestsListener() {
+            if (!window.db) return;
+            window.firebaseOnValue(window.firebaseRef(window.db, 'quests/'), (snap) => {
+                firebaseQuests = snap.val() || {};
+                const activeTab = document.querySelector('#quest-sub-nav .sub-nav-item.active');
+                if (activeTab) {
+                    const tabText = activeTab.textContent.trim();
+                    if (tabText === 'ACTIVE') renderActiveQuests();
+                    else if (tabText === 'AVAILABLE') renderAvailableQuests();
+                    else if (tabText === 'ISSUED') renderIssuedQuests();
+                }
+            }, () => {});
         }
 
         function getFactionRelation(rep) {
@@ -2350,7 +2731,7 @@
         function confirmAuth() {
             const code = document.getElementById('auth-code').value;
             
-            if (code !== '1234') {
+            if (code !== '5318008') {
                 closeModals();
                 showNotification("ACCESS DENIED: INVALID AUTHORIZATION CODE.");
                 return;
@@ -2512,7 +2893,9 @@
             if (q.completed) {
                 toggleBtn.style.display = 'block';
                 toggleBtn.innerText = "MARK AS INCOMPLETE";
-                abandonBtn.style.display = 'none';
+                abandonBtn.style.display = 'block';
+                abandonBtn.innerText = "REMOVE QUEST";
+                abandonBtn.onclick = executeQuestRemove;
             } else if (q.abandoned) {
                 toggleBtn.style.display = 'none';
                 abandonBtn.style.display = 'block';
@@ -2718,14 +3101,24 @@
                 ])
             }));
             buttons.push({ label: 'CANCEL', color: 'var(--pip-color-dim)', action: () => {} });
-            showCustomPrompt('REMOVE WHICH MAP MARKER?', buttons);
+            // v0.86: empty text — heading was blocking scroll to top of button list
+            showCustomPrompt('', buttons);
             // v0.57: scroll the button stack to the top so the first markers are visible
             const btnC = document.getElementById('cp-buttons');
             if (btnC) btnC.scrollTop = 0;
+            // v0.86: also scroll the modal content to top
+            const mc = document.querySelector('#custom-prompt-modal .modal-content');
+            if (mc) mc.scrollTop = 0;
         }
         
+        // v0.85: helper to close the custom prompt modal (class + inline style)
+        function closeCustomPrompt() {
+            const m = document.getElementById('custom-prompt-modal');
+            if (m) { m.style.display = 'none'; m.classList.remove('active'); }
+        }
+
         function closeModals() { 
-            document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); 
+            document.querySelectorAll('.modal-overlay').forEach(m => { m.style.display = 'none'; m.classList.remove('active'); }); 
             activeItemId = null; 
             if (html5QrCode) stopQRScanner();
         }
@@ -3738,6 +4131,7 @@
             }
             pariahEl.style.display = 'block';
             pariahEl.innerHTML = renderPariahPanel() + renderOverseerUserManagement() + renderOverseerGlowingOnes();
+            // v0.86: auto-load contracts to verify after rendering
         }
 
         // v0.63: overseer user management — view ALL users who have EVER broadcast, remove dead ones
@@ -3932,6 +4326,7 @@
             ]);
         }
 
+        // v0.84: render contracts to verify section for overseer
         // ================= SHARED VITALS BAR (v0.52) =================
         // The "overtaking" bar: green = HP remaining, red = the rads-eaten slice growing
         // in from the right (1000 rads eats the whole bar). Beacon telemetry for linked
@@ -4268,6 +4663,20 @@
                 // v0.43: capture auto-archives BOTH versions instantly -- no separate
                 // save step exists anymore, so 'save' is live by construction
                 archiveShot(canvas);
+
+                // v0.119: Check if we should reopen photo picker after snap
+                if (window.reopenPickerAfterSnap) {
+                    window.reopenPickerAfterSnap = false;
+                    // Switch back to data tab and reopen picker
+                    setTimeout(() => {
+                        switchMainTab('data');
+                        // Reopen the appropriate picker
+                        if (window.pendingQuestPhoto && window.pendingQuestPhoto.questId) {
+                            attachPhotoToQuest(window.pendingQuestPhoto.questId);
+                        }
+                    }, 500);
+                    return;
+                }
 
                 // Freeze on the picture + release the sensor (battery)
                 video.style.display = 'none';
@@ -4671,29 +5080,8 @@
             if (!uid) { showNotification('DATACARD CORRUPTED. RESCAN.'); return; }
             if (uid === myMailUid) { showNotification('THAT IS YOUR OWN DATACARD, WASTELANDER.'); return; }
             
-            // v0.70: Check for pending bounty claim
-            if (window.pendingBountyClaim && window.pendingBountyClaim.bounty.targetUid === uid) {
-                const bountyId = window.pendingBountyClaim.id;
-                const myUid = localStorage.getItem('pipboy-uid');
-                const myName = userProfile.name || 'UNKNOWN';
-                
-                window.firebaseUpdate(window.firebaseRef(window.db, 'bounties/' + bountyId), {
-                    status: 'claimed',
-                    claimedBy: myUid,
-                    claimedByName: myName,
-                    claimedAt: Date.now()
-                })
-                    .then(() => {
-                        showNotification('BOUNTY CLAIMED - AWAITING VERIFICATION');
-                        window.pendingBountyClaim = null;
-                        renderBounties();
-                    })
-                    .catch(err => {
-                        showNotification('ERROR CLAIMING BOUNTY: ' + err.message);
-                        window.pendingBountyClaim = null;
-                    });
-                return;
-            }
+            // v0.91: Check for pending bounty scan (unified quest system)
+            if (handleBountyScan(uid)) return;
             
             if (isContact(uid)) { showNotification(contactByUid(uid).name + ' ALREADY LOGGED IN WASTELANDERS MET.'); return; }
             showCustomPrompt('ADD ' + name + ' TO WASTELANDERS MET? THEY WILL BE NOTIFIED OF THE LINK.', [
@@ -4904,8 +5292,9 @@
         let deconActive = false;   // currently inside a decon zone
         let deconFired = false;    // effect already fired this visit (once per entry)
         // v0.70: global contracts and bounties state
-        let globalContracts = {}; // contractId -> contract data
-        let bounties = {};        // bountyId -> bounty data
+        // v0.70: global contracts and bounties state (REPLACED by unified quest system v0.91)
+        // let globalContracts = {}; // REMOVED
+        // let bounties = {};        // REMOVED
 
         function adjustRads(delta) {
             const before = userProfile.rads || 0;
@@ -5122,24 +5511,7 @@
         }
 
         // v0.70: Global contracts listener
-        function startGlobalContractsListener() {
-            window.firebaseOnValue(window.firebaseRef(window.db, 'globalContracts/'), (snap) => {
-                globalContracts = snap.val() || {};
-                if (document.getElementById('quest-tab-global') && document.getElementById('quest-tab-global').classList.contains('active')) {
-                    renderGlobalContracts();
-                }
-            }, () => {}); // offline: last known contracts stand
-        }
-
-        // v0.70: Bounties listener
-        function startBountiesListener() {
-            window.firebaseOnValue(window.firebaseRef(window.db, 'bounties/'), (snap) => {
-                bounties = snap.val() || {};
-                if (document.getElementById('quest-tab-bounties') && document.getElementById('quest-tab-bounties').classList.contains('active')) {
-                    renderBounties();
-                }
-            }, () => {}); // offline: last known bounties stand
-        }
+        // v0.91: Old listeners removed (globalContracts + bounties replaced by unified quests/)
 
         // --- OVERSEER PARIAH CONTROL (STATS tab, dev-mode only) ---
         function renderPariahPanel() {
@@ -5401,20 +5773,9 @@
                     }
                     if (mailSeen.indexOf(key) === -1) {
                         mailSeen.push(key); changedSeen = true;
-                        // v0.45: NOTIFY LINKS off = no pop-up; the scan parks as a MAIL
-                        // tab row and waits for YOU to tap it
-                        if (!notifyPref('link')) { linkScans[key] = l; continue; }
-                        showCustomPrompt((l.fromName || 'UNKNOWN') + ' HAS SCANNED YOUR DATACARD. ADD THEM TO WASTELANDERS MET?', [
-                            {
-                                label: 'ACCEPT LINK',
-                                action: () => {
-                                    addContact(safeUid(l.from), (l.fromName || 'UNKNOWN').toUpperCase());
-                                    retireLetter(key);
-                                    if (currentDataTab === 'wastelanders') { renderWastelanders(); renderLinkRequests(); }
-                                }
-                            },
-                            { label: 'IGNORE', color: 'var(--pip-color-dim)', action: () => { retireLetter(key); } }
-                        ]);
+                        // v0.81: ALWAYS park handshakes — never show modal on app load
+                        // User must manually check mail to see link requests
+                        linkScans[key] = l;
                     }
                     continue; // handshakes are prompts, never inbox rows
                 }
@@ -5468,6 +5829,8 @@
 
         function typeSummary(l) {
             if (l.type === 'quest') return 'QUEST: ' + (l.payload && l.payload.title ? l.payload.title : '');
+            if (l.type === 'quest-offer') return '📋 QUEST OFFER: ' + (l.payload && l.payload.title ? l.payload.title : '');
+            if (l.type === 'verify-request') return '⏳ VERIFY: ' + (l.payload && l.payload.title ? l.payload.title : '') + ' BY ' + (l.payload && l.payload.completedByName ? l.payload.completedByName : 'UNKNOWN');
             if (l.type === 'item') return 'ITEM: ' + (l.payload && l.payload.name ? l.payload.name : '') + ' x' + (l.payload && l.payload.quantity ? l.payload.quantity : 1);
             // v0.47: message letters can carry attachments — say so on the ACTION row
             if (l.type === 'msg' && l.payload && (l.payload.photo || l.payload.item)) {
@@ -5558,9 +5921,28 @@
             } else if (l.type === 'quest') {
                 const p = l.payload || {};
                 showCustomPrompt('QUEST FROM ' + from + ': "' + (p.title || '') + '"' + (p.brief ? ' — ' + p.brief : '') + ' — OBJ: ' + ((p.objectives || []).join(' / ') || 'NONE') + (p.reward ? ' — REWARD: ' + p.reward : ''), [
-                    { label: 'ACCEPT CONTRACT', action: () => acceptQuest(key, l) },
+                    { label: 'ACCEPT CONTRACT', action: () => acceptLegacyQuestFromMail(key, l) },
                     { label: 'DECLINE', color: '#ff3333', action: () => declineLetter(key) }
                 ]);
+            } else if (l.type === 'quest-offer') {
+                const p = l.payload || {};
+                showCustomPrompt('DIRECT QUEST FROM ' + from + ':\n\n"' + (p.title || '') + '"' + (p.description ? '\n\n' + p.description : '') + (p.reward ? '\n\nREWARD: ' + p.reward : ''), [
+                    { label: 'ACCEPT QUEST', action: () => { acceptQuestFromMail(key, l); } },
+                    { label: 'DECLINE', color: '#ff3333', action: () => declineLetter(key) }
+                ]);
+            } else if (l.type === 'verify-request') {
+                const p = l.payload || {};
+                const buttons = [
+                    { label: 'VIEW EVIDENCE', action: () => { if (p.evidencePhoto) viewEvidencePhoto(p.evidencePhoto); else showNotification('NO EVIDENCE PHOTO'); } },
+                    { label: 'VERIFY COMPLETION', color: '#39ff14', action: () => { verifyQuestFromMail(key, l); } },
+                    { label: 'REJECT', color: '#ff3333', action: () => { rejectQuestFromMail(key, l); } },
+                    { label: 'DECIDE LATER', action: () => {} }
+                ];
+                showCustomPrompt('QUEST COMPLETED BY ' + (p.completedByName || 'UNKNOWN') + ':\n\n"' + (p.title || '') + '"\n\nVERIFY OR REJECT?', buttons);
+                if (p.evidencePhoto) {
+                    const img = document.getElementById('cp-img');
+                    if (img) { img.src = p.evidencePhoto; img.style.display = 'block'; }
+                }
             } else if (l.type === 'item') {
                 const p = l.payload || {};
                 showCustomPrompt('ITEM FROM ' + from + ': ' + (p.name || 'UNKNOWN') + ' x' + (p.quantity || 1) + '. ADD TO INVENTORY?', [
@@ -5568,6 +5950,79 @@
                     { label: 'DECLINE', color: '#ff3333', action: () => declineLetter(key) }
                 ]);
             }
+        }
+
+        // v0.91: Accept a direct quest from mail
+        function acceptQuestFromMail(key, l) {
+            const myUid = localStorage.getItem('pipboy-uid');
+            const myName = userProfile.name || 'UNKNOWN';
+            const questId = l.payload && l.payload.questId;
+            if (!questId) { showNotification('QUEST DATA MISSING'); declineLetter(key); return; }
+            const progRef = window.firebaseRef(window.db, 'quests/' + questId + '/progress/' + myUid);
+            window.firebaseSet(progRef, {
+                acceptedAt: Date.now(),
+                status: 'accepted',
+                completedByName: myName
+            })
+                .then(() => {
+                    showNotification('QUEST ACCEPTED');
+                    markProcessed(key);
+                    retireLetter(key);
+                    if (mailTabActive()) renderMail();
+                })
+                .catch(err => showNotification('ERROR: ' + err.message));
+        }
+
+        // v0.91: Verify a quest completion from mail
+        function verifyQuestFromMail(key, l) {
+            const myUid = localStorage.getItem('pipboy-uid');
+            const questId = l.payload && l.payload.questId;
+            if (!questId) { showNotification('QUEST DATA MISSING'); declineLetter(key); return; }
+            // Find the uid of the person who completed it
+            const completedByUid = Object.keys(firebaseQuests[questId] && firebaseQuests[questId].progress || {}).find(uid => {
+                const p = firebaseQuests[questId].progress[uid];
+                return p.status === 'completed' && p.completedByName === (l.payload && l.payload.completedByName);
+            });
+            if (!completedByUid) { showNotification('COMPLETION NOT FOUND'); return; }
+            const progRef = window.firebaseRef(window.db, 'quests/' + questId + '/progress/' + completedByUid);
+            window.firebaseUpdate(progRef, {
+                status: 'verified',
+                verifiedBy: myUid,
+                verifiedByName: userProfile.name || 'UNKNOWN',
+                verifiedAt: Date.now()
+            })
+                .then(() => {
+                    showNotification('COMPLETION VERIFIED');
+                    markProcessed(key);
+                    retireLetter(key);
+                    if (mailTabActive()) renderMail();
+                })
+                .catch(err => showNotification('ERROR: ' + err.message));
+        }
+
+        // v0.91: Reject a quest completion from mail
+        function rejectQuestFromMail(key, l) {
+            const myUid = localStorage.getItem('pipboy-uid');
+            const questId = l.payload && l.payload.questId;
+            if (!questId) { showNotification('QUEST DATA MISSING'); declineLetter(key); return; }
+            const completedByUid = Object.keys(firebaseQuests[questId] && firebaseQuests[questId].progress || {}).find(uid => {
+                const p = firebaseQuests[questId].progress[uid];
+                return p.status === 'completed' && p.completedByName === (l.payload && l.payload.completedByName);
+            });
+            if (!completedByUid) { showNotification('COMPLETION NOT FOUND'); return; }
+            const progRef = window.firebaseRef(window.db, 'quests/' + questId + '/progress/' + completedByUid);
+            window.firebaseUpdate(progRef, {
+                status: 'rejected',
+                rejectedBy: myUid,
+                rejectedAt: Date.now()
+            })
+                .then(() => {
+                    showNotification('COMPLETION REJECTED');
+                    markProcessed(key);
+                    retireLetter(key);
+                    if (mailTabActive()) renderMail();
+                })
+                .catch(err => showNotification('ERROR: ' + err.message));
         }
 
         // v0.45: compact log-copy thumbs so PHOTO TRANSMISSIONS stay viewable from the
@@ -5654,7 +6109,7 @@
             showCustomPrompt(from + ' REPORTS CONTRACT FULFILLED: "' + title + '".' + (myCopy ? ' YOU HOLD AN OPEN COPY OF THIS CONTRACT.' : ''), buttons);
         }
 
-        function acceptQuest(key, l) {
+        function acceptLegacyQuestFromMail(key, l) {
             const p = l.payload || {};
             const objectives = [];
             if (p.brief) objectives.push('BRIEF: ' + p.brief);
@@ -5703,10 +6158,12 @@
             const n = Object.keys(inboxLetters).length;
             const u = Object.keys(unverifiedLetters).length;
             const k = Object.keys(linkScans).length; // v0.45: parked link requests count too
-            const counts = (n ? ' (' + n + ')' : '') + (u ? ' (' + u + '?)' : '') + (k ? ' (' + k + ' LINK' + (k > 1 ? 'S' : '') + ')' : '');
-            // v0.55: pulsing amber envelope when anything waits; plain text when quiet
-            if (n + u + k > 0) el.innerHTML = '<span class="mail-pip">✉</span> MAIL' + counts;
-            else el.innerText = 'MAIL';
+            // v1.00: simplified - just show amber when there are items, no counts
+            if (n + u + k > 0) {
+                el.innerHTML = '<span class="mail-pip" style="color: #ffb642; text-shadow: 0 0 5px #ffb642;">✉</span> MAIL';
+            } else {
+                el.innerText = 'MAIL';
+            }
             // v0.55: home-screen icon badge mirrors the waiting count (installed PWAs)
             try { if ('setAppBadge' in navigator) { if (n + u + k > 0) navigator.setAppBadge(n + u + k).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); } } catch (e) {}
         }
@@ -5890,7 +6347,8 @@
         function isMutualLink(uid) {
             if (!contactByUid(uid)) return false;
             const links = outbox.filter(e => e.type === 'handshake' && e.to === uid);
-            if (links.some(e => e.status === 'accepted')) return true;
+            // v1.00: 'closed' means receiver accepted and retired the letter (mutual link confirmed)
+            if (links.some(e => e.status === 'accepted' || e.status === 'closed')) return true;
             if (links.some(e => e.status === 'sent' || e.status === 'queued' || e.status === 'sending')) return false;
             return true;
         }
@@ -6757,8 +7215,7 @@
                 startPariahListener(); // v0.46
                 startRadZoneListener(); // v0.47
                 startStarchedListener(); // v0.58: Starched Genes global toggle
-                startGlobalContractsListener(); // v0.70: Global contracts
-                startBountiesListener(); // v0.70: Bounties
+                startQuestsListener(); // v0.91: Unified quest system (replaces globalContracts + bounties)
                 flushOutbox();
                 refreshOutboxStatuses();
                 renderMailBadge();
@@ -6806,7 +7263,10 @@
         let radioServerOffset = 0;     // ms skew vs the satellite, via /.info/serverTimeOffset (phone clocks lie)
         let radioSyncOn = localStorage.getItem('pipboy-radio-sync') !== 'off'; // default ON
         let radioAppliedEpoch = {};    // { sid: epoch } this unit last joined with -- a change = SKIP/RESTART
-        let radioSyncTimer = null;     // 5s drift watchdog while synced
+        let radioLocalOffset = 0;  // v0.105: manual sync adjustment in seconds
+        let radioSyncTimer = null;
+        let radioNextTrackAudio = null;  // v0.105: for predictive buffering
+        let radioCrossfadeAudio = null;  // v0.105: for crossfade transitions     // 5s drift watchdog while synced
         let radioOrder = {};           // v0.56: free-run shuffle memory { sid: [trackIdx,...] }
         const radioAudio = new Audio();
         radioAudio.preload = 'auto';
@@ -6821,6 +7281,7 @@
         function initRadio() {
             radioDlState = JSON.parse(localStorage.getItem('pipboy-radio-dl') || '{}');
             radioPos = JSON.parse(localStorage.getItem('pipboy-radio-pos') || '{}');
+            radioLocalOffset = parseFloat(localStorage.getItem('pipboy-radio-offset') || '0');  // v0.105: load manual offset
             fetch('radio-stations.json').then(r => r.json()).then(m => {
                 radioManifest = m;
                 m.stations.forEach(s => { s.totalDur = s.tracks.reduce((a, t) => a + (t.d || 0), 0); }); // v0.54: sync math needs loop lengths
@@ -6901,16 +7362,133 @@
                     const p = radioLivePos(radioCur); // re-derive AT load time -- buffering burned wall-clock
                     const want = (p && p.idx === radioTrackIdx) ? p.seek : (startAt || 0);
                     radioAudio.currentTime = Math.max(0, Math.min(want, (radioAudio.duration || want) - 0.25));
+                    
+                    // v0.105: Predictive buffering - pre-load next track 8s before end
+                    scheduleNextTrackPreload(st, synced);
                 } catch (e) {}
-            } : null;
+            } : () => {
+                // v0.105: Also schedule for free-run mode
+                scheduleNextTrackPreload(st, synced);
+            };
             radioAudio.onended = synced ? () => radioSyncBoundary(0)
-                                        : () => { radioStatic(550); radioNext(); };
+                                        : () => { 
+                                            // v0.105: Use crossfade if next track is pre-loaded
+                                            if (radioNextTrackAudio && radioNextTrackAudio.readyState >= 2) {
+                                                radioCrossfadeToNext();
+                                            } else {
+                                                radioStatic(550); 
+                                                radioNext(); 
+                                            }
+                                        };
             radioAudio.onerror = () => {
                 if (now) now.innerText = 'NO SIGNAL -- ' + st.name + ' NEEDS THE PACK ([⇩] BELOW) OR A LIVE LINK.';
             };
             radioAudio.play().catch(() => {});
             if (now) now.innerText = (synced ? 'LIVE · ' : '') + st.name + ' :: ' + tr.a + ' — ' + tr.t;
             renderRadioTab();
+        }
+        
+        // v0.105: Pre-load next track before current one ends
+        function scheduleNextTrackPreload(st, synced) {
+            if (!radioAudio.duration) return;
+            
+            const preloadTime = Math.max(0, (radioAudio.duration - radioAudio.currentTime - 8) * 1000);
+            setTimeout(() => {
+                if (!radioCur || radioTrackIdx === undefined) return;
+                
+                // Calculate next track index
+                const nextIdx = (radioTrackIdx + 1) % st.tracks.length;
+                const nextTrack = radioTrackAt(st, radioCur, nextIdx);
+                
+                // Pre-load into buffer audio
+                if (!radioNextTrackAudio) {
+                    radioNextTrackAudio = new Audio();
+                    radioNextTrackAudio.preload = 'auto';
+                }
+                radioNextTrackAudio.src = trackUrl(st, nextTrack);
+                radioNextTrackAudio.load();
+                
+                // v0.105: Schedule crossfade 1.5s before end (free-run only)
+                if (!synced) {
+                    const crossfadeTime = Math.max(0, (radioAudio.duration - radioAudio.currentTime - 1.5) * 1000);
+                    setTimeout(() => {
+                        if (radioCur && radioNextTrackAudio && radioNextTrackAudio.readyState >= 2) {
+                            radioCrossfadeToNext();
+                        }
+                    }, crossfadeTime);
+                }
+            }, preloadTime);
+        }
+        
+        // v0.105: Crossfade to next track
+        function radioCrossfadeToNext() {
+            if (!radioNextTrackAudio || radioNextTrackAudio.readyState < 2) {
+                radioNext();
+                return;
+            }
+            
+            const st = stationById(radioCur);
+            if (!st) return;
+            
+            // Start next track
+            radioNextTrackAudio.volume = 0;
+            radioNextTrackAudio.play().catch(() => {});
+            
+            // Fade out current, fade in next over 1.5s
+            const fadeSteps = 15;
+            const fadeInterval = 100; // 1.5s total
+            let step = 0;
+            
+            const fadeTimer = setInterval(() => {
+                step++;
+                const progress = step / fadeSteps;
+                
+                try {
+                    radioAudio.volume = Math.max(0, 1 - progress);
+                    radioNextTrackAudio.volume = Math.min(1, progress);
+                } catch (e) {}
+                
+                if (step >= fadeSteps) {
+                    clearInterval(fadeTimer);
+                    
+                    // Swap audio elements
+                    const tempAudio = radioAudio;
+                    radioAudio.src = radioNextTrackAudio.src;
+                    radioAudio.currentTime = radioNextTrackAudio.currentTime;
+                    radioAudio.volume = 1;
+                    radioAudio.play().catch(() => {});
+                    
+                    // Clean up
+                    radioNextTrackAudio.pause();
+                    radioNextTrackAudio.src = '';
+                    
+                    // Advance track index
+                    radioTrackIdx = (radioTrackIdx + 1) % st.tracks.length;
+                    radioPos[radioCur] = radioOrderForSid(st, radioCur)[radioTrackIdx];
+                    saveRadioState();
+                    
+                    // Update display
+                    const tr = radioTrackAt(st, radioCur, radioTrackIdx);
+                    const now = document.getElementById('radio-now');
+                    const synced = radioIsSynced(radioCur);
+                    if (now) now.innerText = (synced ? 'LIVE · ' : '') + st.name + ' :: ' + tr.a + ' — ' + tr.t;
+                    renderRadioTab();
+                    
+                    // Re-setup event handlers
+                    radioAudio.onended = synced ? () => radioSyncBoundary(0)
+                                                : () => {
+                                                    if (radioNextTrackAudio && radioNextTrackAudio.readyState >= 2) {
+                                                        radioCrossfadeToNext();
+                                                    } else {
+                                                        radioStatic(550);
+                                                        radioNext();
+                                                    }
+                                                };
+                    
+                    // Schedule next preload
+                    scheduleNextTrackPreload(st, synced);
+                }
+            }, fadeInterval);
         }
 
         function radioNext() {
@@ -7090,24 +7668,77 @@
             saveRadioState();
             radioPlayCurrent(pos.seek);
         }
-        // 5s drift watchdog: full rejoin when the shared playhead is on another track (covers
-        // overseer SKIP), hard punch only past 1.5s adrift so there's no constant micro-stutter.
+        // v0.105: 3s drift watchdog with tighter 0.8s tolerance + manual offset support
         function radioSyncWatchdog() {
             if (radioSyncTimer) { clearInterval(radioSyncTimer); radioSyncTimer = null; }
-            if (!radioCur || !radioIsSynced(radioCur)) return;
+            if (!radioCur || !radioIsSynced(radioCur)) {
+                document.getElementById('radio-sync-controls').style.display = 'none';
+                return;
+            }
+            document.getElementById('radio-sync-controls').style.display = 'block';
             radioSyncTimer = setInterval(() => {
                 if (!radioCur || !radioIsSynced(radioCur)) { clearInterval(radioSyncTimer); radioSyncTimer = null; return; }
                 const pos = radioLivePos(radioCur);
                 if (!pos) return;
                 if (pos.idx !== radioTrackIdx) { radioJoinLive(false); return; }
-                try { if (Math.abs((radioAudio.currentTime || 0) - pos.seek) > 1.5) radioAudio.currentTime = pos.seek; } catch (e) {}
-            }, 5000);
+                
+                // v0.105: Apply manual offset and use tighter tolerance
+                const targetSeek = pos.seek + radioLocalOffset;
+                const currentSeek = radioAudio.currentTime || 0;
+                const drift = Math.abs(currentSeek - targetSeek);
+                
+                // Update sync indicator
+                updateSyncIndicator(drift);
+                
+                // Correct if drift exceeds 0.8s (tighter than old 1.5s)
+                try { 
+                    if (drift > 0.8) {
+                        radioAudio.currentTime = Math.max(0, Math.min(targetSeek, (radioAudio.duration || targetSeek) - 0.1));
+                    }
+                } catch (e) {}
+            }, 3000);  // v0.105: check every 3s instead of 5s
         }
         function radioSyncToggle() {
             radioSyncOn = !radioSyncOn;
             localStorage.setItem('pipboy-radio-sync', radioSyncOn ? 'on' : 'off');
             if (radioCur) radioStop(); // clean re-tune under the new mode
             renderRadioTab(); // v0.56: the button label + HUD glyph say it -- toast culled per user
+        }
+        
+        // v0.105: Update sync indicator display
+        function updateSyncIndicator(drift) {
+            const indicator = document.getElementById('radio-sync-indicator');
+            if (!indicator) return;
+            
+            const driftStr = drift.toFixed(1);
+            let color = '#39ff14'; // green for <1s
+            if (drift >= 1.0 && drift < 2.0) color = '#ffb642'; // amber for 1-2s
+            else if (drift >= 2.0) color = '#ff3333'; // red for >2s
+            
+            indicator.textContent = `SYNC ±${driftStr}s`;
+            indicator.style.color = color;
+            indicator.style.textShadow = `0 0 5px ${color}`;
+        }
+        
+        // v0.105: Manual sync adjustment ±0.1s
+        function radioSyncAdjust(delta) {
+            radioLocalOffset += delta;
+            // Clamp to reasonable range ±5s
+            radioLocalOffset = Math.max(-5, Math.min(5, radioLocalOffset));
+            localStorage.setItem('pipboy-radio-offset', radioLocalOffset.toString());
+            
+            // Immediately apply the adjustment
+            if (radioCur && radioIsSynced(radioCur)) {
+                const pos = radioLivePos(radioCur);
+                if (pos) {
+                    const targetSeek = pos.seek + radioLocalOffset;
+                    try {
+                        radioAudio.currentTime = Math.max(0, Math.min(targetSeek, (radioAudio.duration || targetSeek) - 0.1));
+                    } catch (e) {}
+                }
+            }
+            
+            showNotification(`SYNC OFFSET: ${radioLocalOffset >= 0 ? '+' : ''}${radioLocalOffset.toFixed(1)}s`);
         }
         // Satellite listeners; deferred until window.db exists (same retry shape as initComms).
         function initRadioSync(tries) {
